@@ -31,6 +31,12 @@ print("--Loading packages--")
 library(reshape2)
 library(dplyr)
 library(data.table)
+library(doSNOW)
+library(foreach)
+
+#Set number of CPUs to use
+cl<-makeCluster(1) #change the 2 to your number of CPU cores
+registerDoSNOW(cl)
 
 #Load data (To generate this data: run DataPreparation.R)
 print("--Loading data--")
@@ -59,7 +65,7 @@ NetVlakFunctieMax <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenG
    progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
    OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
    
-   for (ii in 1:n) { #Element index 
+   foreach(ii=1:n) %dopar% { #Element index 
       setTxtProgressBar(progressbar,ii)
       
       #Baseload stays the same
@@ -163,4 +169,6 @@ write.table(LS_Max_Laag_Scenario, "Resultaat_MaxBelasting_LS_Hld_Laag.csv", sep 
 write.table(MSR_Max_Laag_Scenario, "Resultaat_MaxBelasting_MSR_Laag.csv", sep = ";", row.names = FALSE)
 save.image("Results.Rdata")
 
+#Close CPU cluster
+stopCluster(cl)
 print("--Done!--")
