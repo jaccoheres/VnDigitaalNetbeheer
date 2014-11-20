@@ -1,7 +1,7 @@
 #Script om belasting per LS_hld/MSR te bepalen dmv prognoses K&M
 
 rm(list=ls(all=TRUE))
-setwd("\\\\fspaka01/userdata3b$/AL8368/Documents/Advies Groep/NieuwConnectiviteitsmodel/Belastingprofiel_Bepaling/")
+setwd("C:/Programmeerwerk/VnDigitaalNetbeheerData/")
 
 ##ONDERSTAAND STUK HOEFT WAARSCHIJNLIJK MAAR EEN KEER WANT HEEFT PACKAGE DPLYR NODIG (niet beschikbaar op server)
 library(reshape2)
@@ -530,6 +530,7 @@ NetVlakFunctieMax <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenG
     for (Jr in 1:16) {
       Tot_Profiel <- Baseload + EVPenGr[i,Jr+1]*EV_Profiel_uur_max$V1 + PVPenGr[i,Jr+1]*PV_Profiel_uur_max$V1 + WPPenGr[i,Jr+1]*WP_Profiel_uur_max$V1
       
+      cat(Jr)
       #Eerste kolom is voor de max
       OutputMatrix[i,5*(Jr-1)+1] <- max(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
       #Daarna voor de bijdragen van Baseload, EV, PV, en WP
