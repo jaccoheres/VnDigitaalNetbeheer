@@ -10,21 +10,20 @@
 # "So t' script has some pirate talk in it. ARRRRRR be t' pirate language!"
 
 # Abbriviations
-# KV = KleinVerbruikers (Small Users)
-# GV = GrootVerbruikers (Large Users)
-# WP = WarmtePomp       (Combined Heat and Power (CHP))
-# PV = Photovoltaic
-# EV = Electric Vehicles
+# KV  = KleinVerbruikers      (Small Users)
+# GV  = GrootVerbruikers      (Large Users)
+# WP  = WarmtePomp            (Combined Heat and Power (CHP))
+# PV  = PhotoVoltaic
+# EV  = Electric Vehicles
+# HLD = HoofdLeiDing          (Major LV line) (Headline is the wrong translation ;))
+# LV  = Low Voltage
+# MSR = MiddenSpanningsRuimte (Medium-to-low voltage transformer room)
 
-# To do's from Tim
-#GENERIEKE FUNCTIE MAKEN OM DE NETVLAKKEN DOOR TE REKENEN
-#TODO: -Per netvlak functie ook de kwaliteitsaspecten meenemen (kijken hoe lang een bepaalde belasting optreed en kijken of deze niet te lang optreed voor bepaald netcomponenten)
-#Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
 
 ##Initialize ----------------------------------------------------------------------
 # Remove all data and set working directory
 rm(list=ls(all=TRUE))
-setwd("C:/Programmeerwerk/VnDigitaalNetbeheerData/")
+setwd("C:/Programmeerwerk/Data")
 
 print("--Loading packages--")
 # Load packages
@@ -42,133 +41,194 @@ registerDoSNOW(cl)
 print("--Loading data--")
 load("Connections_NH.RData")
 
-##Calculations ----------------------------------------------------------------------
-print("--Starting calculations--")
+# Append matrices
+print("--Appending matrices--")
+#Create scenarios using peak values: n_installations * Peak value
+scenarios = cbind(base,WPall*WPpeak,EVall*EVpeak,PVall*PVpeak)
+# scenarios[is.na(scenarios)]=0
 
-# Define functions
-NetVlakFunctieMax <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenGr) {
-   #NetVlakFunctieMax, Calculates maximum load of net components
-   #
-   #INPUTS
-   #AantalComponenten; is een lijst met het aantal componenten
-   #BaseL; data.frame met BaseL gegevens per Netvlak
-   #EVPenGr, PVPenGr, WPPenGr; data.frame met PenetratieGraden per scenario en Netvlak
-   #
-   #Deze functie gaat ervan uit dat de EDSN, EV, PV, en WP belastingprofielen al zijn ingeladen
-   #
-   #OUTPUT
-   #Deze functie geeft als Output een matrix met daarin alle voorspellingen per jaar per netvlak component
-   
+# Calculate loads
+print("--Doing calculations--")
+#Generate peak values
 
-   #Initialize
-   n = length(AantalComponenten) #Total number of elements
-   progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
-   OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
-   
-   foreach(ii=1:n) %dopar% { #Element index 
-      setTxtProgressBar(progressbar,ii)
-      
-      #Baseload stays the same
-      Baseload <- rowSums(EDSN_profiel_uur_max_bare%*%diag(BaseL[ii,2:11]))
-   
-      for (Jr in 1:16) { #Year index
-         Tot_Profiel <- Baseload + EVPenGr[ii,Jr+1]*EV_Profiel_uur_max$V1 + PVPenGr[ii,Jr+1]*PV_Profiel_uur_max$V1 + WPPenGr[ii,Jr+1]*WP_Profiel_uur_max$V1
-         
-         #Eerste kolom is voor de max
-         OutputMatrix[ii,5*(Jr-1)+1] <- max(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
-         #Daarna voor de bijdragen van Baseload, EV, PV, en WP
-         MaxIndex <- which.max(Tot_Profiel)
-         OutputMatrix[ii,5*(Jr-1)+2] <- Baseload[MaxIndex]
-         OutputMatrix[ii,5*(Jr-1)+3] <- EV_Profiel_uur_max$V1[MaxIndex]*EVPenGr[ii,Jr+1]
-         OutputMatrix[ii,5*(Jr-1)+4] <- PV_Profiel_uur_max$V1[MaxIndex]*PVPenGr[ii,Jr+1]
-         OutputMatrix[ii,5*(Jr-1)+5] <- WP_Profiel_uur_max$V1[MaxIndex]*WPPenGr[ii,Jr+1]
-      }
-   }
-   
-   return(OutputMatrix)
-}
+#Calculate the whole network
+tic()
+HLDload = matprod_simple_triplet_matrix(PC6toHLD, scenarios) #Calculate HLD loads
+MSRload = matprod_simple_triplet_matrix(HLDtoMSR, HLDload)   #Calculate MSR loads
+toc()
+#Elegant, isn't it?
 
-NetVlakFunctieMin <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenGr) {
-   
-   #INPUTS
-   #AantalComponenten; is een lijst met het aantal componenten waarover moet worden geitereerd
-   #BaseL; data.frame met BaseL gegevens per Netvlak
-   #EVPenGr, PVPenGr, WPPenGr; data.frame met PenetratieGraden per scenario en Netvlak
-   
-   #Deze functie gaat ervan uit dat de EDSN, EV, PV, en WP belastingprofielen al zijn ingeladen
-   
-   #OUTPUT
-   #Deze functie geeft als Output een matrix met daarin alle voorspellingen per jaar per netvlak component
-   
-   #Als eerste de resultaten matrix prealloceren
-   n = length(AantalComponenten) #Total number of elements
-   progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
-   OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
-   
-   #Beginnen met het maken van de BaseL, omdat deze maar een keer hoeft te worden gemaakt
-   for (ii in 1:length(AantalComponenten)) {
-      Baseload <- rowSums(EDSN_profiel_uur_min_bare%*%diag(BaseL[ii,2:11]))
-      for (Jr in 1:16) {
-         setTxtProgressBar(progressbar,ii)
-         Tot_Profiel <- Baseload + EVPenGr[ii,Jr+1]*EV_Profiel_uur_min$V1 + PVPenGr[ii,Jr+1]*PV_Profiel_uur_min$V1 + WPPenGr[ii,Jr+1]*WP_Profiel_uur_min$V1
-         
-         #Eerste kolom is voor de max
-         OutputMatrix[ii,5*(Jr-1)+1] <- min(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
-         #Daarna voor de bijdragen van Baseload, EV, PV, en WP
-         MinIndex <- which.min(Tot_Profiel)
-         OutputMatrix[ii,5*(Jr-1)+2] <- Baseload[MinIndex]
-         OutputMatrix[ii,5*(Jr-1)+3] <- EV_Profiel_uur_min$V1[MinIndex]*EVPenGr[ii,Jr+1]
-         OutputMatrix[ii,5*(Jr-1)+4] <- PV_Profiel_uur_min$V1[MinIndex]*PVPenGr[ii,Jr+1]
-         OutputMatrix[ii,5*(Jr-1)+5] <- WP_Profiel_uur_min$V1[MinIndex]*WPPenGr[ii,Jr+1]
-         
-         #Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
-         
-         #Opruimen
-         #       rm(Tot_Profiel)
-         #       rm(MaxIndex)
-      }
-      #     rm(Baseload)
-   }
-   
-   return(OutputMatrix)
-   
-}
-
-# Execute functions
-print("--Starting LS calculations--")
-LS_Max_Laag_Scenario <- NetVlakFunctieMax(1:nrow(LS_Hld_PenGr_EV_L), LS_Hld_BaseL, LS_Hld_PenGr_EV_L, LS_Hld_PenGr_PV_L,  LS_Hld_PenGr_WP_L)
-print("--Starting LS completed!--")
-
-# MSR Calculations
-print("--Starting MSR calculations--")
-MSR_Max_Laag_Scenario <- NetVlakFunctieMax(1:nrow(MSR_PenGr_EV_L), MSR_BaseL, MSR_PenGr_EV_L, MSR_PenGr_PV_L, MSR_PenGr_WP_L)
-print("--Starting MSR completed!--")
-
-
-##Post-processing -------------------------------------------------------------------
-print("--Starting post-processing--")
-
-# Stukje code om de kolomnamen toe te voegen aan de resultaten, ik maak eerst een lijst 
-KolomNamenJaren <- c("2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028", "2029", "2030")
-KolomNamenMaxMin <- c("_belasting", "_BaseL_bijdrage", "_EV_bijdrage", "_PV_bijdrage", "_WP_bijdrage")
-
-KolomNamenTabel <- as.vector(sapply(KolomNamenJaren, function(x) paste(x, KolomNamenMaxMin, sep = "")))
-
-colnames(LS_Max_Laag_Scenario) <- KolomNamenTabel
-colnames(MSR_Max_Laag_Scenario) <- KolomNamenTabel
-
-#Nu vervolgens koppelen aan elkaar
-LS_Max_Laag_Scenario <- cbind(Unieke_Ls_Hld[ML_Resultaten_LS_HLD_aan_Gegevens,], LS_Max_Laag_Scenario)
-MSR_Max_Laag_Scenario <- cbind(Unieke_MSR[ML_Unieke_MSR_aan_Resultaten_MSR,], MSR_Max_Laag_Scenario)
-
-
-
-## Save results ---------------------------------------------------------------------
+# Save results
 print("--Saving results--")
-write.table(LS_Max_Laag_Scenario, "Resultaat_MaxBelasting_LS_Hld_Laag.csv", sep = ";", row.names = FALSE)
-write.table(MSR_Max_Laag_Scenario, "Resultaat_MaxBelasting_MSR_Laag.csv", sep = ";", row.names = FALSE)
-save.image("Results.Rdata")
 
-#Close CPU cluster
-stopCluster(cl)
-print("--Done!--")
+# Formatting
+# EAN PC6 LS HLD MSR Base Ev(low/med/high/hydrogen) PV(low/med/high) WP(low/med/high) 
+
+#Output to Excel
+
+print("--Done! Its ARRRrrrresome!--")
+
+ 
+
+
+
+
+# ################### For reference: Legacy code by Tim Lucas
+# 
+# # To do's from Tim
+# #GENERIEKE FUNCTIE MAKEN OM DE NETVLAKKEN DOOR TE REKENEN
+# #TODO: -Per netvlak functie ook de kwaliteitsaspecten meenemen (kijken hoe lang een bepaalde belasting optreed en kijken of deze niet te lang optreed voor bepaald netcomponenten)
+# #Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
+# 
+# 
+# ##Initialize ----------------------------------------------------------------------
+# # Remove all data and set working directory
+# rm(list=ls(all=TRUE))
+# setwd("C:/Programmeerwerk/VnDigitaalNetbeheerData/")
+# 
+# print("--Loading packages--")
+# # Load packages
+# library(reshape2)
+# library(dplyr)
+# library(data.table)
+# library(doSNOW)
+# library(foreach)
+# 
+# #Set number of CPUs to use
+# cl<-makeCluster(1) #change the 2 to your number of CPU cores
+# registerDoSNOW(cl)
+# 
+# #Load data (To generate this data: run DataPreparation.R)
+# print("--Loading data--")
+# load("Connections_NH.RData")
+# 
+# ##Calculations ----------------------------------------------------------------------
+# print("--Starting calculations--")
+# 
+# # Define functions
+# NetVlakFunctieMax <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenGr) {
+#    #NetVlakFunctieMax, Calculates maximum load of net components
+#    #
+#    #INPUTS
+#    #AantalComponenten; is een lijst met het aantal componenten
+#    #BaseL; data.frame met BaseL gegevens per Netvlak
+#    #EVPenGr, PVPenGr, WPPenGr; data.frame met PenetratieGraden per scenario en Netvlak
+#    #
+#    #Deze functie gaat ervan uit dat de EDSN, EV, PV, en WP belastingprofielen al zijn ingeladen
+#    #
+#    #OUTPUT
+#    #Deze functie geeft als Output een matrix met daarin alle voorspellingen per jaar per netvlak component
+#    
+# 
+#    #Initialize
+#    n = length(AantalComponenten) #Total number of elements
+#    progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
+#    OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
+#    
+#    foreach(ii=1:n) %dopar% { #Element index 
+#       setTxtProgressBar(progressbar,ii)
+#       
+#       #Baseload stays the same
+#       Baseload <- rowSums(EDSN_profiel_uur_max_bare%*%diag(BaseL[ii,2:11]))
+#    
+#       for (Jr in 1:16) { #Year index
+#          Tot_Profiel <- Baseload + EVPenGr[ii,Jr+1]*EV_Profiel_uur_max$V1 + PVPenGr[ii,Jr+1]*PV_Profiel_uur_max$V1 + WPPenGr[ii,Jr+1]*WP_Profiel_uur_max$V1
+#          
+#          #Eerste kolom is voor de max
+#          OutputMatrix[ii,5*(Jr-1)+1] <- max(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
+#          #Daarna voor de bijdragen van Baseload, EV, PV, en WP
+#          MaxIndex <- which.max(Tot_Profiel)
+#          OutputMatrix[ii,5*(Jr-1)+2] <- Baseload[MaxIndex]
+#          OutputMatrix[ii,5*(Jr-1)+3] <- EV_Profiel_uur_max$V1[MaxIndex]*EVPenGr[ii,Jr+1]
+#          OutputMatrix[ii,5*(Jr-1)+4] <- PV_Profiel_uur_max$V1[MaxIndex]*PVPenGr[ii,Jr+1]
+#          OutputMatrix[ii,5*(Jr-1)+5] <- WP_Profiel_uur_max$V1[MaxIndex]*WPPenGr[ii,Jr+1]
+#       }
+#    }
+#    
+#    return(OutputMatrix)
+# }
+# 
+# NetVlakFunctieMin <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenGr) {
+#    
+#    #INPUTS
+#    #AantalComponenten; is een lijst met het aantal componenten waarover moet worden geitereerd
+#    #BaseL; data.frame met BaseL gegevens per Netvlak
+#    #EVPenGr, PVPenGr, WPPenGr; data.frame met PenetratieGraden per scenario en Netvlak
+#    
+#    #Deze functie gaat ervan uit dat de EDSN, EV, PV, en WP belastingprofielen al zijn ingeladen
+#    
+#    #OUTPUT
+#    #Deze functie geeft als Output een matrix met daarin alle voorspellingen per jaar per netvlak component
+#    
+#    #Als eerste de resultaten matrix prealloceren
+#    n = length(AantalComponenten) #Total number of elements
+#    progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
+#    OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
+#    
+#    #Beginnen met het maken van de BaseL, omdat deze maar een keer hoeft te worden gemaakt
+#    for (ii in 1:length(AantalComponenten)) {
+#       Baseload <- rowSums(EDSN_profiel_uur_min_bare%*%diag(BaseL[ii,2:11]))
+#       for (Jr in 1:16) {
+#          setTxtProgressBar(progressbar,ii)
+#          Tot_Profiel <- Baseload + EVPenGr[ii,Jr+1]*EV_Profiel_uur_min$V1 + PVPenGr[ii,Jr+1]*PV_Profiel_uur_min$V1 + WPPenGr[ii,Jr+1]*WP_Profiel_uur_min$V1
+#          
+#          #Eerste kolom is voor de max
+#          OutputMatrix[ii,5*(Jr-1)+1] <- min(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
+#          #Daarna voor de bijdragen van Baseload, EV, PV, en WP
+#          MinIndex <- which.min(Tot_Profiel)
+#          OutputMatrix[ii,5*(Jr-1)+2] <- Baseload[MinIndex]
+#          OutputMatrix[ii,5*(Jr-1)+3] <- EV_Profiel_uur_min$V1[MinIndex]*EVPenGr[ii,Jr+1]
+#          OutputMatrix[ii,5*(Jr-1)+4] <- PV_Profiel_uur_min$V1[MinIndex]*PVPenGr[ii,Jr+1]
+#          OutputMatrix[ii,5*(Jr-1)+5] <- WP_Profiel_uur_min$V1[MinIndex]*WPPenGr[ii,Jr+1]
+#          
+#          #Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
+#          
+#          #Opruimen
+#          #       rm(Tot_Profiel)
+#          #       rm(MaxIndex)
+#       }
+#       #     rm(Baseload)
+#    }
+#    
+#    return(OutputMatrix)
+#    
+# }
+# 
+# # Execute functions
+# print("--Starting LS calculations--")
+# LS_Max_Laag_Scenario <- NetVlakFunctieMax(1:nrow(LS_Hld_PenGr_EV_L), LS_Hld_BaseL, LS_Hld_PenGr_EV_L, LS_Hld_PenGr_PV_L,  LS_Hld_PenGr_WP_L)
+# print("--Starting LS completed!--")
+# 
+# # MSR Calculations
+# print("--Starting MSR calculations--")
+# MSR_Max_Laag_Scenario <- NetVlakFunctieMax(1:nrow(MSR_PenGr_EV_L), MSR_BaseL, MSR_PenGr_EV_L, MSR_PenGr_PV_L, MSR_PenGr_WP_L)
+# print("--Starting MSR completed!--")
+# 
+# 
+# ##Post-processing -------------------------------------------------------------------
+# print("--Starting post-processing--")
+# 
+# # Stukje code om de kolomnamen toe te voegen aan de resultaten, ik maak eerst een lijst 
+# KolomNamenJaren <- c("2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028", "2029", "2030")
+# KolomNamenMaxMin <- c("_belasting", "_BaseL_bijdrage", "_EV_bijdrage", "_PV_bijdrage", "_WP_bijdrage")
+# 
+# KolomNamenTabel <- as.vector(sapply(KolomNamenJaren, function(x) paste(x, KolomNamenMaxMin, sep = "")))
+# 
+# colnames(LS_Max_Laag_Scenario) <- KolomNamenTabel
+# colnames(MSR_Max_Laag_Scenario) <- KolomNamenTabel
+# 
+# #Nu vervolgens koppelen aan elkaar
+# LS_Max_Laag_Scenario <- cbind(Unieke_Ls_Hld[ML_Resultaten_LS_HLD_aan_Gegevens,], LS_Max_Laag_Scenario)
+# MSR_Max_Laag_Scenario <- cbind(Unieke_MSR[ML_Unieke_MSR_aan_Resultaten_MSR,], MSR_Max_Laag_Scenario)
+# 
+# 
+# 
+# ## Save results ---------------------------------------------------------------------
+# print("--Saving results--")
+# write.table(LS_Max_Laag_Scenario, "Resultaat_MaxBelasting_LS_Hld_Laag.csv", sep = ";", row.names = FALSE)
+# write.table(MSR_Max_Laag_Scenario, "Resultaat_MaxBelasting_MSR_Laag.csv", sep = ";", row.names = FALSE)
+# save.image("Results.Rdata")
+# 
+# #Close CPU cluster
+# stopCluster(cl)
+# print("--Done!--")
