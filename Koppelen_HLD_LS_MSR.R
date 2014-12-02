@@ -1,5 +1,8 @@
 setwd("N:/Bottum Up Analyse/2. Data/3. Nettopologie")
-#append column to data frame with with frequency of one of it's columns
+require(data.table)
+library(plyr)
+
+# Koppelen EANS -> Hoofdleidingen -> MSR -------------------------------------------
 
 #inlezen hoofdleidingen in bonoka
 hld              <- read.table("HLD_AANSL.txt",sep=";",dec=",",col.names=c("HoofdleidingID","Aantal_Aansluitingen"))
@@ -112,4 +115,10 @@ sum(EANStoMSR4$freq.EANopMSR)
 #write.csv(msrs,file="MSRbonoka.csv")
 #table(msrs$BMR_FUNCTIE)
 
+
+#Uitlezen MSR-gegevens, selecteren relevante MSR's en wegschrijven data------------------------------------
+MSR      <-  read.table("N:/Bottum Up Analyse/9. Flevoland/Data Tim/NieuwConnectiviteitsmodel/RuweData/MS_Stations_NL.csv", sep=';',header=T,quote=NULL)
+MSR$PC4  <-  substr(MSR$POSTCODE,1,4)         #PC4 aanmaken
+MSRNHN   <-  MSR[which(MSR$PC4 %in% PC4s$Postcode),]
+write.csv(MSRNHN, file="N:/Bottum Up Analyse/2. Data/4. Kabel en MSR-gegevens/MSRgegevens.csv")
 
