@@ -17,9 +17,9 @@
 # EV = Electric Vehicles
 
 # To do's from Tim
-#GENERIEKE FUNCTIE MAKEN OM DE NETVLAKKEN DOOR TE REKENEN
-#TODO: -Per netvlak functie ook de kwaliteitsaspecten meenemen (kijken hoe lang een bepaalde belasting optreed en kijken of deze niet te lang optreed voor bepaald netcomponenten)
-#Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
+# GENERIEKE FUNCTIE MAKEN OM DE NETVLAKKEN DOOR TE REKENEN
+# TODO: -Per netvlak functie ook de kwaliteitsaspecten meenemen (kijken hoe lang een bepaalde belasting optreed en kijken of deze niet te lang optreed voor bepaald netcomponenten)
+# Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
 
 ##Initialize ----------------------------------------------------------------------
 # Remove all data and set working directory

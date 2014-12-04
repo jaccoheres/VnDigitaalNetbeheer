@@ -1,3 +1,6 @@
+setwd("N:/Bottum Up Analyse/2. Data/3. Nettopologie")
+library(data.table)
+library(plyr)
 # Hoe goed is elke aansluitcategorie in beeld? ---------------------------------------------------------
 CAR    <- fread("CAR_E.csv",colClass="character")                   #inlezen alle EAN's
 PC4s   <- read.csv("N:/Bottum Up Analyse/2. Data/0. Gebiedsafbakening/Noord_Holland_PCzonderVelsen.csv",sep=";")
@@ -30,6 +33,10 @@ CARNHN$AC[which(CARNHN$AC=="" & CARNHN$CONTRACT_CAPACITEI>=160 & CARNHN$CONTRACT
 CARNHN$AC[which(CARNHN$AC=="" & CARNHN$CONTRACT_CAPACITEI>=2000 & CARNHN$CONTRACT_CAPACITEI<10000 )]  <- "AC6"
 CARNHN$AC[which(CARNHN$AC=="" & CARNHN$CONTRACT_CAPACITEI>=10000)]                                    <- "AC7"
 table(CARNHN$AC)
+
+#wegschrijven eans voor grootverbruikers
+#write.csv(CARNHN[which(CARNHN$AC != "AC1" & CARNHN$AC != "AC2"),],file="CARNHNGV.csv")
+write.csv(CARNHN$EAN_CODE_AANSLUITING[which(CARNHN$AC != "AC1" & CARNHN$AC != "AC2")],file="CARNHNGV$EAN.csv",row.names=F)
 
 #Hoeveel zitten in set LS aanlsuitingen?
 CARinLSHLD <- CARNHN[which(CARNHN$EAN_CODE_AANSLUITING %in% EANStoHFD$EAN),]
