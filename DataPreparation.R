@@ -134,16 +134,20 @@ WPprofileindex = (nbaseprofile+nEVprofile+nWPprofile+1):(nbaseprofile+nEVprofile
 
 print("--Create lists of unique PC6, LSLD, HLD and MSR elements (2c/6)--")
 # Create list with unique PC6 codes
-PC6 = sort(unique(Users$ARI_ADRES))
+PC6     = sort(unique(Users$ARI_ADRES))
 # Create list with LSLD codes
-LSLD = sort(unique(Users$LS_KABELS_ID))
-LSLD = substr(LSLD, 1, 9)
+LSLD    = sort(unique(Users$LS_KABELS_ID))
+LSLD    = substr(LSLD, 1, 9)
 # Create list with HLD codes
-HLD = sort(unique(Users$HOOFDLEIDING))
+HLD     = sort(unique(Users$HOOFDLEIDING))
 # Create list with MSR codes
 MSRlist = unique(c(MSR$MSR,GV$netnr))   # Retrieve MSR numbers
-#Calculate number of households per PC6
-hhPC6 = table(Users$ARI_ADRES)                
+# Create list with OS fields
+OSLD    = unique(MSRcap$ROUTENAAM)
+# Create list with OS
+OS      = unique(MSRcap$OS_NAAM)
+# Calculate number of households per PC6
+hhPC6   = table(Users$ARI_ADRES)        
 
 ############################################################################# Calculating base loads
 print("--Calculating baseload (2d/6)--")
@@ -158,6 +162,18 @@ EDSNperPC6 = group_by(EDSNperPC6, V1,V2)
 EDSNperPC6 = summarise(EDSNperPC6, SJV = sum(V3))
 EDSNperPC6 = as.matrix(dcast(EDSNperPC6,V1~V2)[3:12])
 EDSNperPC6[is.na(EDSNperPC6)]=0
+
+print("--Add OS field and OS information to MSR table (2e/6)--")
+# Add OS and OS field colums to table 'MSR' for future notice
+# We lose 26 MSRs (e.g. 26 MSRs do not have a field and OS defined)
+indexlist = match(MSR$MSR,MSRcap$NUMMER_BEH)
+MSR       = data.frame(MSR,"OSLD"=MSRcap$ROUTENAAM[indexlist],"OS"=MSRcap$OS_NAAM[indexlist])
+MSR$OSLD  = as.character(MSR$OSLD)
+MSR$OS    = as.character(MSR$OS)
+indexlist = match(GV$netnr,MSRcap$NUMMER_BEH)
+GV        = data.frame(GV,"OSLD"=MSRcap$ROUTENAAM[indexlist],"OS"=MSRcap$OS_NAAM[indexlist])
+GV$OSLD   = as.character(GV$OSLD)
+GV$OS     = as.character(GV$OS)
 
 #######BRRRRRroken
 # ## Account for unconnected KV PC6 peak loads
@@ -232,7 +248,7 @@ toc()
 # Create HLD to MSR connection matrix
 print("--Filling sparse connection matrix for HLD to MSR (3b/6)--")
 # Define the matrix
-HLDtoMSRlist= MSR$HOOFDLEIDING              # Retrieve the HLD cables connected to each Use
+HLDtoMSRlist= MSR$HOOFDLEIDING              # Retrieve the HLD cables connected to each User
 
 indexlist    = match(HLD,HLDtoMSRlist)      # Search for HLD_IDs in HLD_MSR list
 MSRwithHLD  = MSR$MSR[indexlist]            # Get the MSR IDs for the corresponding HLDs
@@ -260,16 +276,58 @@ j = 1:length(GVuse)
 v = matrix(1,length(GVuse),1)
 GVtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = length(GVuse),dimnames = NULL)
 
+# Create MSR TO OS_field connection matrix
+print("--Filling sparse connection matrix for MSR to OS Field (3d/6)--")
+# Define the matrix
+MSRtoOSLDlist  = c(MSR$MSR,GV$netnr)            # Retrieve the MSR connected to each User and GV
+
+indexlist      = match(MSRlist,MSRtoOSLDlist)   # Search for MSRs in MSR_MSR list
+OSLDwithMSR    = c(MSR$OSLD,GV$OSLD)[indexlist] # Get the OSLD IDs for the corresponding MSRs
+OSLDindexlist  = match(OSLDwithMSR,OSLD)        # Find the OSLD index for each OSLD ID
+NANlist        = is.na(OSLDindexlist)==FALSE    # Remove all NA's (i.e. MSRs which are not matched)
+
+#Create connection matrix
+MSRindex     = 1:length(MSRlist)
+MSRNANindex  = MSRindex[NANlist]
+i = OSLDindexlist[NANlist]
+j = MSRNANindex
+v = matrix(1,length(MSRNANindex),1)
+MSRtoOSLD = simple_triplet_matrix(i, j, v, nrow = length(OSLD), ncol = max(j),dimnames = NULL)
+
+# Create OS Field TO OS connection matrix
+print("--Filling sparse connection matrix for OS Field to OS (3e/6)--")
+# Define the matrix
+OSLDtoOSlist   = c(MSR$OSLD,GV$OSLD)          # Retrieve the OSLD connected to each User and GV
+
+indexlist      = match(OSLD,OSLDtoOSlist)     # Search for OSLDs in OSLD_MSR list
+OSwithOSLD     = c(MSR$OS,GV$OS)[indexlist]   # Get the OS IDs for the corresponding HLDs
+OSindexlist    = match(OSwithOSLD,OS)         # Find the OS index for each OS ID
+NANlist        = is.na(OSindexlist)==FALSE    # Remove all NA's (i.e. OSLDs which are not matched)
+
+#Create connection matrix
+OSLDindex     = 1:length(OSLD)
+OSLDNANindex  = OSLDindex[NANlist]
+i = OSindexlist[NANlist]
+j = OSLDNANindex
+v = matrix(1,length(OSLDNANindex),1)
+OSLDtoOS = simple_triplet_matrix(i, j, v, nrow = length(OS), ncol = length(OSLD),dimnames = NULL)
+
 ############## Create other useful interconnection matrices from 'base' interconnection matrices
-print("--Create other required interconnection matrices (3d/6)--")
+print("--Create other required interconnection matrices (3f/6)--")
 # Create interconnection matrix from users to MSR
-PC6toMSR = as.simple_triplet_matrix(matprod_simple_triplet_matrix(HLDtoMSR, PC6toHLD))   
+PC6toMSR  = as.simple_triplet_matrix(matprod_simple_triplet_matrix(HLDtoMSR, PC6toHLD))  
+PC6toOSLD = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, PC6toMSR)) 
+PC6toOS   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, PC6toOSLD)) 
+GVtoOSLD  = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, GVtoMSR)) 
+GV6toOS   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, GVtoOSLD)) 
 # Interconnection back from MSR to HLD. Equals inverse(HLDtoMSR)
 # Because HLDtoMSR is sparse and only has '1' as entry, inverse(HLDtoMSR) = t(HLDtoMSR)
-MSRtoHLD = t(HLDtoMSR)                                                                   
+MSRtoHLD  = t(HLDtoMSR) 
+# Comment above also holds for interconnection from OSLD to MSR
+OSLDtoMSR = t(MSRtoOSLD)
 
 ############## Find max capacity for HLD and MSR
-print("--Find max capacity for HLD and MSR (3e/6)--")
+print("--Find max capacity for HLD and MSR (3g/6)--")
 # Calculate maximum capacity of each HLD
 # NOTE: this assumes that the cable with the highest capacity in an LS_HLD gets the maximum load. To be refined based on better net-topological model
 
@@ -282,10 +340,10 @@ Imax[is.na(Imax)] = 0
 
 dfLSLDmax = data.frame(HOOFDLEIDING=HLDcap$HOOFDLEIDING,                           #Create data frame for matching and summarizing.
                        capaciteit=0.4*Imax*(1/sqrt(3)))   
-dfHLDmax = ddply(dfLSLDmax, .(HOOFDLEIDING), summarise, MaxCap = max(capaciteit))  #Find maximum capacity per LS_HLD.                                              
+dfHLDmax  = ddply(dfLSLDmax, .(HOOFDLEIDING), summarise, MaxCap = max(capaciteit))  #Find maximum capacity per LS_HLD.                                              
 dfHLDlist = data.frame("HOOFDLEIDING"=HLD)                                         #Cast HLD to dataframe for joining                                                              
 dfHLDlist = join(dfHLDlist,dfHLDmax,by="HOOFDLEIDING")                             #Join HLDlist with HLDmax                                              
-HLDmax = dfHLDlist$MaxCap                                                                                 
+HLDmax    = dfHLDlist$MaxCap                                                                                 
 HLDmax[is.na(HLDmax)]=0                                                            #Set is.na's to 0 (from incomplete match between HLDlist and HLDmax)
 
 #cleanup variables
@@ -350,14 +408,16 @@ rm(PVallmat,WPallmat,WPKMPC6,PVKMPC6)
 ################################################### Calculating peak time
 print("--Generate scenario list (5b/6)--")
 #Generate the scenario list in the correct order for easy export
-nMSR = dim(PC6toMSR)[1]
-nHLD = dim(PC6toHLD)[1]
+nOSLD      = dim(PC6toOSLD)[1]
+nMSR       = dim(PC6toMSR)[1]
+nHLD       = dim(PC6toHLD)[1]
 nscenarios = nyears*nEVscen*nPVscen*nWPscen
 
 ### Initialize matrices which will hold scenario's per PC6 HLD and MSR
-tempScenariosperPC6 = matrix(NA, length(PC6),nprofiles)        
-ScenariosperHLD = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nHLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
-ScenariosperMSR = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+tempScenariosperPC6  = matrix(NA, length(PC6),nprofiles)        
+ScenariosperHLD      = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nHLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+ScenariosperMSR      = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+ScenariosperOSLD     = array(NA, c(nOSLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 
 index = 1
 progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
@@ -373,7 +433,9 @@ for (EVii in 1:nEVscen) {
         # Apply matrix multiplication to arrive at matrices per HLD and MSR
         ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
         ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
+        ScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempScenariosperPC6)
         index = index + 1
+        # TODO: Add GV
       }
     }
   }
