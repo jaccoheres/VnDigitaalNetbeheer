@@ -25,6 +25,9 @@
 ##Initialize ----------------------------------------------------------------------
 # Remove all data and set working directory
 rm(list=ls(all=TRUE))
+gc(verbose=FALSE)
+path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
+setwd(paste0(path,"/7. Output"))
 
 print("--Loading packages--")
 # Load packages
@@ -35,245 +38,163 @@ library(slam)       #Used for sparse matrices
 library(tictoc)     #Because I am a Matlab person
 library(xlsx)
 library(ggplot2)
+library(doSNOW)
 
 #Load data (To generate this data: run DataPreparation.R)
 print("--Loading data--")
-setwd("C:/Programmeerwerk/Data")
-load("Connections_NH.RData")
+load("Connections_NH_v2.RData")
 
-# Append matrices
-print("--Appending matrices--")
-#Create scenarios using peak values: n_installations * Peak value
-# scenarios = cbind(base,PVall*PVpeak,EVall*EVpeak,WPall*WPpeak)
-PVall[is.na(PVall)]=0
-EVall[is.na(EVall)]=0
-WPall[is.na(WPall)]=0
-scenario[is.na(scenario)]=0
-
-
-# scenarios = cbind(base,PVall[,35:51]*PVpeak+EVall[,35:51]*EVpeak+WPall[,35:51]*WPpeak)
-
-# Calculate loads
-print("--Doing calculations--")
-#Calculate the loads of the whole network
-tic()
-LSLDload  = matprod_simple_triplet_matrix(PC6toLSLD, scenario)  #Calculate LSLD loads
-MSRload   = matprod_simple_triplet_matrix(LSLDtoMSR, LSLDload)  #Calculate MSR loads
-MSRloadGV = matprod_simple_triplet_matrix(GVtoMSR, GVuse)       #Calculate GV MSR loads
-HLDload   = matprod_simple_triplet_matrix(PC6toHLD, scenario)   #Calculate HLD loads
-toc()
-#Elegant, isn't it?
-
-#Check and count capacity problems
-table(MSRload[,1]+MSRloadGV>MSRmax)
-table(MSRmax!=0&MSRload[,1]+MSRloadGV>MSRmax)
-# table(HLDmax!=0&HLDload[,1]>HLDmax)
-
-# Save results
-print("--Saving results--")
-
-# Export to Excel
-
-#TODO
-#-Reshape data
-#-Save scenario index
-
-# Vision requires a very specific output format. The script is quick & dirty. At least it is commented!
-indexlist      = match(MSRlist,Vnames$NR_Behuizing_NRG)        # Cannot match 362 stations
-Visionlist     = Vnames$ID_Vision[indexlist]                   # Sort the list of MSR's in the Vision order
-NAlist         = is.na(Visionlist)==FALSE                      # Create a list of MSR that have not been found
-exportnamelist = Visionlist[NAlist]                            # Only use the found MSR for the export
-NAlist         = c(NAlist,NAlist*2,NAlist*3,NAlist*4)                
-exportbaseload = matrix(MSRload[NAlist],length(exportnamelist)*4,nscenarios)     # Reshape results for saving in Vision format
-
-exportname = c(paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep='')) #Setup the specific Vision names
-dt = data.table(t(exportbaseload))  #Convert exportmatrix to datatable because R is not capable enough to save matrices
-setnames(dt,exportname)             #Set the column names
-dt2 = data.table(scenarionumber)
-setnames(dt2,c('Year','PV scenario', 'EV scenario', 'WP scenario', 'peak time index', 'minimum time index'))
-
-# Write csv
-write.csv2(dt , "MSRloadvision.csv",)
-write.csv2(dt2, "Scenarioindex.csv",)
-
-print("--Done! Its ARRRrrrresome!--")
-
-##################################Generate a quick (&dirty) plot
-factor = seq(0,30,length=50)           # Newbaseload = baseload * factor
-outcome = numeric(length(factor))
-
-# For every factor, check the number of overloaded MSR
-for (ii in 1:length(factor)){
-   print(ii)
-   outcome[ii] = table(MSRmax!=0&((MSRload[,1]+MSRloadGV)*factor[ii])>MSRmax)[2]
+# Defines function which calculates peak time per MSR
+# Function calculates the total year-profile per MSR per scenario per year, and 
+# then finds the time at which the load is mimimum and maximum.
+# Note: this function only gives back the time at which this happens. The load itself is calculated
+# later per base, EV, PV and WP
+ParMSRPeaktimeCalculation <- function(iter,nparscenarios) {
+  Outputmatrix = matrix(nrow = nMSR,ncol=2*nparscenarios)
+  for(ii in 1:nparscenarios) {
+    for(MSRii in 1:nMSR) {
+      MSRtotalprofile = Allprofiles %*% ScenariosperMSR[MSRii,,(ii+(iter*nparscenarios))]
+      Outputmatrix[MSRii,ii]               = which.max(MSRtotalprofile)          #peaktime
+      Outputmatrix[MSRii,nparscenarios+ii] = which.min(MSRtotalprofile)          #peaktimemin
+    }  
+  }
+  return(Outputmatrix)
 }
-d1<-data.frame(basefactor=factor,overbelast=outcome)
-theme_set(theme_gray(base_size = 18)) # vergrooten lettergroottes
 
-# Write a png
-setwd("C:/Programmeerwerk/Data")
-png("overbelast.png",width=800, height=500)
-qplot(factor,outcome,xlab="Baseload (1 = nu)",ylab="Aantal overbelaste MSR",geom='line',
-      col=I('blue'),size=1,legend=F,main="Overbelaste MSR versus toename baseload")
-geom_line(aes(factor, outcome, colour=I('red')), d1)
-dev.off()
+# Initialise matrices which will hold the peak time and minimum peak time (feedin) per MSR
+MSRpeaktimetemp = matrix(nrow = nMSR, ncol = 2*nscenarios)
+MSRpeaktime = matrix(nrow = nMSR, ncol = nscenarios)
+MSRpeaktimemin = matrix(nrow = nMSR, ncol = nscenarios)
 
-# ################### For reference: Legacy code by Tim Lucas
+print("--Calculating peak time per MSR--")
+# Function is called using full number of CPUs set in DataPreparation.R
+# Rerun DataPreparation to override, manually set "nCPU" in the context of this script
+nparscenarios = nscenarios/nCPUs
+cl<-makeCluster(nCPUs) 
+registerDoSNOW(cl)
+tic()
+MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1), 
+                          .packages='slam', 
+                          .combine=cbind,
+                          .verbose=FALSE) %dopar% {ParMSRPeaktimeCalculation(iter,nparscenarios)}
+
+toc()
+stopCluster(cl)
+
+# Because peaktimes are processed parallelly, we need to re-order the columns.
+# Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
+# Results are re-ordered below and stored in two separate matrices
+indexlist = rep(c(rep(TRUE,nPVscen*nWPscen*nyears),rep(FALSE,nPVscen*nWPscen*nyears)),nCPUs)
+MSRpeaktime = MSRpeaktimetemp[,indexlist]
+MSRpeaktimemin = MSRpeaktimetemp[,!indexlist]
+rm(MSRpeaktimetemp)
+
+print("--Calculating peak time per HLD--")
+# Peak time per HLD is calculated by using MSRtoHLD interconnection matrices
+tic()
+HLDpeaktime = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime)
+HLDpeaktimemin = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin)
+toc()
+
+# Based on the peak times, the minimum and maximum load is then found.
+print("--Calculate load per HLD and mSR--")
+# Initialise  matrices
+MSRload    = matrix(nrow = 4*nMSR, ncol = nscenarios)
+MSRloadmin = matrix(nrow = 4*nMSR, ncol = nscenarios)
+tempMSR    = matrix(nrow = nMSR, ncol = nprofiles)
+HLDload    = matrix(nrow = 4*nHLD, ncol = nscenarios)
+HLDloadmin = matrix(nrow = 4*nHLD, ncol = nscenarios)
+tempHLD    = matrix(nrow = nHLD, ncol = nprofiles)
+
+# Because we already have the peak times, no matrix multiplications are required here,
+# only element-wise multiplications of profile[peaktime]*[SJV,nEV,nPV,nWP]
+progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
+tic()
+for(ii in 1:nscenarios) {
+  setTxtProgressBar(progressbar,ii)
+  
+  # For each scenario, we find the load from Allprofiles which corresponds with the peak time per MSR 
+  # and multiply this element wise with a vector containing [SJV,nEV,nPV,nWP]
+  # This gives a matrix tempMSR with dimension [nMSR * nprofiles]
+  # in the second step, this matrix is truncated so that different profiles which correspond to the same load
+  # (e.g. 10 EDSN profiles which all correspond to the 'base' load) are summed up into 1 value
+  
+  #peak load per MSR  
+  tempMSR = Allprofiles[MSRpeaktime[,ii],] * ScenariosperMSR[,,ii]
+  tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]),tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
+  MSRload[,ii] = c(tempMSR)
+  
+  #minimum peak load per MSR (=maximum feedin)
+  tempMSR = Allprofiles[MSRpeaktimemin[,ii],] * ScenariosperMSR[,,ii]
+  tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]),tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
+  MSRloadmin[,ii] = c(tempMSR)
+  
+  #peak load per HLD 
+  tempHLD = Allprofiles[HLDpeaktime[,ii],] * ScenariosperHLD[,,ii]
+  tempHLD = cbind(rowSums(tempHLD[,baseprofileindex]),tempHLD[,EVprofileindex],tempHLD[,PVprofileindex],tempHLD[,WPprofileindex])
+  HLDload[,ii] = c(tempHLD)
+  
+  #minimum load per HLD (=maximum feedin)
+  tempHLD = Allprofiles[HLDpeaktimemin[,ii],] * ScenariosperHLD[,,ii]
+  tempHLD = cbind(rowSums(tempHLD[,baseprofileindex]),tempHLD[,EVprofileindex],tempHLD[,PVprofileindex],tempHLD[,WPprofileindex])  
+  HLDloadmin[,ii] = c(tempHLD)
+  
+}
+toc()
+close(progressbar)
+rm(tempHLD,tempMSR)
+
+######################################################### Save results
+print("--Saving results--")
+setwd(paste0(path,"/7. Output"))
+
+# Save necessary data
+save.image("CalculationOutput_NH_v2.RData")
+print("--Done!--")
+
+# ##################################Generate a quick (&dirty) plot
+# factor = seq(0,30,length=50)           # Newbaseload = baseload * factor
+# outcome = numeric(length(factor))
 # 
-# # To do's from Tim
-# #GENERIEKE FUNCTIE MAKEN OM DE NETVLAKKEN DOOR TE REKENEN
-# #TODO: -Per netvlak functie ook de kwaliteitsaspecten meenemen (kijken hoe lang een bepaalde belasting optreed en kijken of deze niet te lang optreed voor bepaald netcomponenten)
-# #Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
-# 
-# 
-# ##Initialize ----------------------------------------------------------------------
-# # Remove all data and set working directory
-# rm(list=ls(all=TRUE))
-# setwd("C:/Programmeerwerk/VnDigitaalNetbeheerData/")
-# 
-# print("--Loading packages--")
-# # Load packages
-# library(reshape2)
-# library(dplyr)
-# library(data.table)
-# library(doSNOW)
-# library(foreach)
-# 
-# #Set number of CPUs to use
-# cl<-makeCluster(1) #change the 2 to your number of CPU cores
-# registerDoSNOW(cl)
-# 
-# #Load data (To generate this data: run DataPreparation.R)
-# print("--Loading data--")
-# load("Connections_NH.RData")
-# 
-# ##Calculations ----------------------------------------------------------------------
-# print("--Starting calculations--")
-# 
-# # Define functions
-# NetVlakFunctieMax <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenGr) {
-#    #NetVlakFunctieMax, Calculates maximum load of net components
-#    #
-#    #INPUTS
-#    #AantalComponenten; is een lijst met het aantal componenten
-#    #BaseL; data.frame met BaseL gegevens per Netvlak
-#    #EVPenGr, PVPenGr, WPPenGr; data.frame met PenetratieGraden per scenario en Netvlak
-#    #
-#    #Deze functie gaat ervan uit dat de EDSN, EV, PV, en WP belastingprofielen al zijn ingeladen
-#    #
-#    #OUTPUT
-#    #Deze functie geeft als Output een matrix met daarin alle voorspellingen per jaar per netvlak component
-#    
-# 
-#    #Initialize
-#    n = length(AantalComponenten) #Total number of elements
-#    progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
-#    OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
-#    
-#    foreach(ii=1:n) %dopar% { #Element index 
-#       setTxtProgressBar(progressbar,ii)
-#       
-#       #Baseload stays the same
-#       Baseload <- rowSums(EDSN_profiel_uur_max_bare%*%diag(BaseL[ii,2:11]))
-#    
-#       for (Jr in 1:16) { #Year index
-#          Tot_Profiel <- Baseload + EVPenGr[ii,Jr+1]*EV_Profiel_uur_max$V1 + PVPenGr[ii,Jr+1]*PV_Profiel_uur_max$V1 + WPPenGr[ii,Jr+1]*WP_Profiel_uur_max$V1
-#          
-#          #Eerste kolom is voor de max
-#          OutputMatrix[ii,5*(Jr-1)+1] <- max(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
-#          #Daarna voor de bijdragen van Baseload, EV, PV, en WP
-#          MaxIndex <- which.max(Tot_Profiel)
-#          OutputMatrix[ii,5*(Jr-1)+2] <- Baseload[MaxIndex]
-#          OutputMatrix[ii,5*(Jr-1)+3] <- EV_Profiel_uur_max$V1[MaxIndex]*EVPenGr[ii,Jr+1]
-#          OutputMatrix[ii,5*(Jr-1)+4] <- PV_Profiel_uur_max$V1[MaxIndex]*PVPenGr[ii,Jr+1]
-#          OutputMatrix[ii,5*(Jr-1)+5] <- WP_Profiel_uur_max$V1[MaxIndex]*WPPenGr[ii,Jr+1]
-#       }
-#    }
-#    
-#    return(OutputMatrix)
+# # For every factor, check the number of overloaded MSR
+# for (ii in 1:length(factor)){
+#    print(ii)
+#    outcome[ii] = table(MSRmax!=0&((MSRload[,1]+MSRloadGV)*factor[ii])>MSRmax)[2]
 # }
+# d1<-data.frame(basefactor=factor,overbelast=outcome)
+# theme_set(theme_gray(base_size = 18)) # vergrooten lettergroottes
 # 
-# NetVlakFunctieMin <- function(AantalComponenten, BaseL, EVPenGr, PVPenGr, WPPenGr) {
-#    
-#    #INPUTS
-#    #AantalComponenten; is een lijst met het aantal componenten waarover moet worden geitereerd
-#    #BaseL; data.frame met BaseL gegevens per Netvlak
-#    #EVPenGr, PVPenGr, WPPenGr; data.frame met PenetratieGraden per scenario en Netvlak
-#    
-#    #Deze functie gaat ervan uit dat de EDSN, EV, PV, en WP belastingprofielen al zijn ingeladen
-#    
-#    #OUTPUT
-#    #Deze functie geeft als Output een matrix met daarin alle voorspellingen per jaar per netvlak component
-#    
-#    #Als eerste de resultaten matrix prealloceren
-#    n = length(AantalComponenten) #Total number of elements
-#    progressbar = txtProgressBar(min = 0, max = n, initial = 0, char = "=", width = NA, title, label, style = 1, file = "")
-#    OutputMatrix <- matrix(ncol = 5*16, nrow = n) #Pre-allocate
-#    
-#    #Beginnen met het maken van de BaseL, omdat deze maar een keer hoeft te worden gemaakt
-#    for (ii in 1:length(AantalComponenten)) {
-#       Baseload <- rowSums(EDSN_profiel_uur_min_bare%*%diag(BaseL[ii,2:11]))
-#       for (Jr in 1:16) {
-#          setTxtProgressBar(progressbar,ii)
-#          Tot_Profiel <- Baseload + EVPenGr[ii,Jr+1]*EV_Profiel_uur_min$V1 + PVPenGr[ii,Jr+1]*PV_Profiel_uur_min$V1 + WPPenGr[ii,Jr+1]*WP_Profiel_uur_min$V1
-#          
-#          #Eerste kolom is voor de max
-#          OutputMatrix[ii,5*(Jr-1)+1] <- min(Tot_Profiel) #Jr begint bij 3 dus -2-1 = -3
-#          #Daarna voor de bijdragen van Baseload, EV, PV, en WP
-#          MinIndex <- which.min(Tot_Profiel)
-#          OutputMatrix[ii,5*(Jr-1)+2] <- Baseload[MinIndex]
-#          OutputMatrix[ii,5*(Jr-1)+3] <- EV_Profiel_uur_min$V1[MinIndex]*EVPenGr[ii,Jr+1]
-#          OutputMatrix[ii,5*(Jr-1)+4] <- PV_Profiel_uur_min$V1[MinIndex]*PVPenGr[ii,Jr+1]
-#          OutputMatrix[ii,5*(Jr-1)+5] <- WP_Profiel_uur_min$V1[MinIndex]*WPPenGr[ii,Jr+1]
-#          
-#          #Hier komt ook nog een stuk waarbij de kwaliteitsfactoren van kabels kan worden gecheckt
-#          
-#          #Opruimen
-#          #       rm(Tot_Profiel)
-#          #       rm(MaxIndex)
-#       }
-#       #     rm(Baseload)
-#    }
-#    
-#    return(OutputMatrix)
-#    
-# }
+# # Write a png
+# setwd("C:/Programmeerwerk/Data")
+# png("overbelast.png",width=800, height=500)
+# qplot(factor,outcome,xlab="Baseload (1 = nu)",ylab="Aantal overbelaste MSR",geom='line',
+#       col=I('blue'),size=1,legend=F,main="Overbelaste MSR versus toename baseload")
+# geom_line(aes(factor, outcome, colour=I('red')), d1)
+# dev.off()
+
+# For reference, code from Werner van Westering
+# # scenarios = cbind(base,PVall[,35:51]*PVpeak+EVall[,35:51]*EVpeak+WPall[,35:51]*WPpeak)
 # 
-# # Execute functions
-# print("--Starting LS calculations--")
-# LS_Max_Laag_Scenario <- NetVlakFunctieMax(1:nrow(LS_LSLD_PenGr_EV_L), LS_LSLD_BaseL, LS_LSLD_PenGr_EV_L, LS_LSLD_PenGr_PV_L,  LS_LSLD_PenGr_WP_L)
-# print("--Starting LS completed!--")
+# # Calculate loads
+# print("--Doing calculations--")
+# #Calculate the loads of the whole network
+# tic()
+# LSLDload     = matprod_simple_triplet_matrix(PC6toLSLD, scenario)    #Calculate LSLD loads
+# MSRload      = matprod_simple_triplet_matrix(LSLDtoMSR, LSLDload)    #Calculate MSR loads
+# MSRloadGV    = matprod_simple_triplet_matrix(GVtoMSR, GVuse)         #Calculate GV MSR loads
+# HLDload      = matprod_simple_triplet_matrix(PC6toHLD, scenario)     #Calculate HLD loads
+# #LSLDloadmin  = matprod_simple_triplet_matrix(PC6toLSLD, scenariomin) #Calculate LSLD loads
+# #MSRloadmin   = matprod_simple_triplet_matrix(LSLDtoMSR, LSLDloadmin) #Calculate MSR loads
+# #MSRloadGVmin = MSRloadGV                                             #Calculate GV MSR loads
+# #HLDloadmin   = matprod_simple_triplet_matrix(PC6toHLD, scenariomin)  #Calculate HLD loads
+# toc()
+# #Elegant, isn't it?
 # 
-# # MSR Calculations
-# print("--Starting MSR calculations--")
-# MSR_Max_Laag_Scenario <- NetVlakFunctieMax(1:nrow(MSR_PenGr_EV_L), MSR_BaseL, MSR_PenGr_EV_L, MSR_PenGr_PV_L, MSR_PenGr_WP_L)
-# print("--Starting MSR completed!--")
+# #Add GV results to KV results
+# MSRload[,seq(1,4*nscenarios,by=4)] = MSRload[,seq(1,4*nscenarios,by=4)]+rep(MSRloadGV,nscenarios)
+# MSRloadmin[,seq(1,4*nscenarios,by=4)] = MSRloadmin[,seq(1,4*nscenarios,by=4)]+rep(MSRloadGVmin,nscenarios)
 # 
-# 
-# ##Post-processing -------------------------------------------------------------------
-# print("--Starting post-processing--")
-# 
-# # Stukje code om de kolomnamen toe te voegen aan de resultaten, ik maak eerst een lijst 
-# KolomNamenJaren <- c("2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025", "2026", "2027", "2028", "2029", "2030")
-# KolomNamenMaxMin <- c("_belasting", "_BaseL_bijdrage", "_EV_bijdrage", "_PV_bijdrage", "_WP_bijdrage")
-# 
-# KolomNamenTabel <- as.vector(sapply(KolomNamenJaren, function(x) paste(x, KolomNamenMaxMin, sep = "")))
-# 
-# colnames(LS_Max_Laag_Scenario) <- KolomNamenTabel
-# colnames(MSR_Max_Laag_Scenario) <- KolomNamenTabel
-# 
-# #Nu vervolgens koppelen aan elkaar
-# LS_Max_Laag_Scenario <- cbind(Unieke_Ls_LSLD[ML_Resultaten_LS_LSLD_aan_Gegevens,], LS_Max_Laag_Scenario)
-# MSR_Max_Laag_Scenario <- cbind(Unieke_MSR[ML_Unieke_MSR_aan_Resultaten_MSR,], MSR_Max_Laag_Scenario)
-# 
-# 
-# 
-# ## Save results ---------------------------------------------------------------------
-# print("--Saving results--")
-# write.table(LS_Max_Laag_Scenario, "Resultaat_MaxBelasting_LS_LSLD_Laag.csv", sep = ";", row.names = FALSE)
-# write.table(MSR_Max_Laag_Scenario, "Resultaat_MaxBelasting_MSR_Laag.csv", sep = ";", row.names = FALSE)
-# save.image("Results.Rdata")
-# 
-# #Close CPU cluster
-# stopCluster(cl)
-# print("--Done!--")
+# #Check and count capacity problems
+# #table(MSRload[,1]>MSRmax)
+# #table(MSRmax!=0&MSRload[,1]>MSRmax)
+# # table(HLDmax!=0&HLDload[,1]>HLDmax)
