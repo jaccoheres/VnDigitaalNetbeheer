@@ -415,9 +415,9 @@ nscenarios = nyears*nEVscen*nPVscen*nWPscen
 
 ### Initialize matrices which will hold scenario's per PC6 HLD and MSR
 tempScenariosperPC6  = matrix(NA, length(PC6),nprofiles)        
-ScenariosperHLD      = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nHLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
-ScenariosperMSR      = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
-ScenariosperOSLD     = array(NA, c(nOSLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+ScenariosperHLD      = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nHLD ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+ScenariosperMSR      = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+ScenariosperOSLD     = array(NA, c(nOSLD,nprofiles,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 
 index = 1
 progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
