@@ -44,6 +44,7 @@ library(doSNOW)
 print("--Loading data--")
 load("Connections_NH_v2.RData")
 
+print("--Defining functions (1/3)--")
 # Defines function which calculates peak time per MSR
 # Function calculates the total year-profile per MSR per scenario per year, and 
 # then finds the time at which the load is mimimum and maximum.
@@ -74,16 +75,15 @@ ParPeaktimeCalculationperOSLD <- function(iter,nparscenarios) {
    return(Outputmatrix)
 }
 
+print("--Calculation based on peaktime per MSR (2/3)--")
 # Initialise matrices which will hold the peak time and minimum peak time (feedin) per MSR 
 MSRpeaktimetemp      = matrix(nrow = nMSR, ncol = 2*nscenarios)
 MSRpeaktime_MSR      = matrix(nrow = nMSR, ncol = nscenarios)
 MSRpeaktimemin_MSR   = matrix(nrow = nMSR, ncol = nscenarios)
 HLDpeaktime_MSR      = matrix(nrow = nHLD, ncol = nscenarios)
 HLDpeaktimemin_MSR   = matrix(nrow = nHLD, ncol = nscenarios)
-OSLDpeaktime_MSR     = matrix(nrow = nOSLD, ncol = nscenarios)
-OSLDpeaktimemin_MSR  = matrix(nrow = nOSLD, ncol = nscenarios)
 
-print("--Calculating peak timeS in network per MSR--")
+print("--> Calculating peak timeS in network per MSR (2a/3)--")
 # Function is called using full number of CPUs set in DataPreparation.R
 # Rerun DataPreparation to override, manually set "nCPU" in the context of this script
 nparscenarios = nscenarios/nCPUs
@@ -106,18 +106,17 @@ MSRpeaktime_MSR    = MSRpeaktimetemp[,indexlist]
 MSRpeaktimemin_MSR = MSRpeaktimetemp[,!indexlist]
 rm(MSRpeaktimetemp)
 
-# Peak time per OSLD and HLD is calculated by using MSRtoOSLD and MSRtoHLD interconnection matrices
+print("--> Cascading peak times per MSR to HLDs (2b/3)--")
+# Peak time per HLD is calculated by using MSRtoHLD interconnection matrices
 tic()
 HLDpeaktime_MSR   = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_MSR)
 HLDpeaktimemin_MSR  = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin_MSR)
-OSLDpeaktime_MSR    = matprod_simple_triplet_matrix(MSRtoOSLD,MSRpeaktime_MSR)
-OSLDpeaktimemin_MSR = matprod_simple_triplet_matrix(MSRtoOSLD,MSRpeaktimemin_MSR)
 toc()
 
+print("--> Calculating loads per MSR and HLD based on peak times per MSR (2c/3)--")
 # Based on the peak times, the minimum and maximum load is then found.
-print("--Calculate loads in network per MSR--")
 # Initialise  matrices
-tempOSLD        = matrix(nrow = nMSR, ncol = nprofiles)
+tempOSLD        = matrix(nrow = nOSLD, ncol = nprofiles)
 tempMSR         = matrix(nrow = nMSR, ncol = nprofiles)
 tempHLD         = matrix(nrow = nHLD, ncol = nprofiles)
 OSLDload_MSR    = matrix(nrow = 4*nOSLD, ncol = nscenarios)
@@ -126,7 +125,6 @@ MSRload_MSR     = matrix(nrow = 4*nMSR, ncol = nscenarios)
 MSRloadmin_MSR  = matrix(nrow = 4*nMSR, ncol = nscenarios)
 HLDload_MSR     = matrix(nrow = 4*nHLD, ncol = nscenarios)
 HLDloadmin_MSR  = matrix(nrow = 4*nHLD, ncol = nscenarios)
-
 
 # Because we already have the peak times, no matrix multiplications are required here,
 # only element-wise multiplications of profile[peaktime]*[SJV,nEV,nPV,nWP]
@@ -140,16 +138,6 @@ for(ii in 1:nscenarios) {
   # This gives a matrix tempMSR with dimension [nMSR * nprofiles]
   # in the second step, this matrix is truncated so that different profiles which correspond to the same load
   # (e.g. 10 EDSN profiles which all correspond to the 'base' load) are summed up into 1 value
-
-  #peak load per OSLD  
-  tempOSLD = Allprofiles[OSLDpeaktime_MSR[,ii],] * ScenariosperOSLD[,,ii]
-  tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]),tempOSLD[,EVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
-  OSLDload_MSR[,ii] = c(tempOSLD)
-  
-  #minimum peak load per OSLD (=maximum feedin)
-  tempOSLD = Allprofiles[OSLDpeaktimemin_MSR[,ii],] * ScenariosperOSLD[,,ii]
-  tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]),tempOSLD[,EVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
-  OSLDloadmin_MSR[,ii] = c(tempOSLD)
   
   #peak load per MSR  
   tempMSR = Allprofiles[MSRpeaktime_MSR[,ii],] * ScenariosperMSR[,,ii]
@@ -174,16 +162,21 @@ for(ii in 1:nscenarios) {
 }
 toc()
 close(progressbar)
-rm(tempOSLD,tempHLD,tempMSR)
 
-# Initialise matrices which will hold the peak time and minimum peak time (feedin) per OSLD 
-OSLDpeaktimetemp      = matrix(nrow = nOSLD, ncol = 2*nscenarios)
-OSLDpeaktime_OSLD     = matrix(nrow = nOSLD, ncol = nscenarios)
-OSLDpeaktimemin_OSLD  = matrix(nrow = nOSLD, ncol = nscenarios)
-MSRpeaktime_OSLD      = matrix(nrow = nMSR, ncol = nscenarios)
-MSRpeaktimemin_OSLD   = matrix(nrow = nMSR, ncol = nscenarios)
-HLDpeaktime_OSLD      = matrix(nrow = nHLD, ncol = nscenarios)
-HLDpeaktimemin_OSLD   = matrix(nrow = nHLD, ncol = nscenarios)
+print("--> Calculating loads per OSLD based on peak times per MSR (2d/3)--")
+# OSLD load is calculated using MSRtoOSLD matrices
+# Note: this is only for checking purposes in the model, to check loads per OSLD based on 
+# MSR peak time calculations, versus loads per OSLD based on OSLD peak time calculations
+indexlist_MSR  = rep(c(TRUE,FALSE,FALSE,FALSE),nMSR)
+indexlist_OSLD = rep(c(TRUE,FALSE,FALSE,FALSE),nOSLD)
+for (i in 1:4) {
+   tempMSRload                       = MSRload_MSR[indexlist_MSR,]
+   OSLDload_MSR[indexlist_OSLD,]     = matprod_simple_triplet_matrix(MSRtoOSLD,tempMSRload)
+   tempMSRload                       = MSRloadmin_MSR[indexlist_MSR,]
+   OSLDloadmin_MSR[indexlist_OSLD,]  = matprod_simple_triplet_matrix(MSRtoOSLD,tempMSRload)
+   indexlist_MSR = c(FALSE,indexlist_MSR[-length(indexlist_MSR)])
+   indexlist_OSLD = c(FALSE,indexlist_OSLD[-length(indexlist_OSLD)])
+}
 
 print("--Calculating peak timeS in network per OSLD--")
 # Function is called using full number of CPUs set in DataPreparation.R
@@ -210,10 +203,12 @@ rm(OSLDpeaktimetemp)
 
 # Peak time per MSR and HLD is calculated by using OSLDtoMSR and MSRtoHLD interconnection matrices
 tic()
-MSRpeaktime_OSLD    = matprod_simple_triplet_matrix(OSLDtoMSR,OSLDpeaktime_OSLD)
-MSRpeaktimemin_OSLD = matprod_simple_triplet_matrix(OSLDtoMSR,OSLDpeaktimemin_OSLD)
-HLDpeaktime_OSLD    = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_OSLD)
-HLDpeaktimemin_OSLD = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin_OSLD)
+MSRpeaktime_OSLD                            = matprod_simple_triplet_matrix(OSLDtoMSR,OSLDpeaktime_OSLD)
+MSRpeaktimemin_OSLD                         = matprod_simple_triplet_matrix(OSLDtoMSR,OSLDpeaktimemin_OSLD)
+MSRpeaktime_OSLD[MSRpeaktime_OSLD==0]       = NA #not all MSRs have an OSLD
+MSRpeaktimemin_OSLD[MSRpeaktimemin_OSLD==0] = NA #not all MSRs have an OSLD
+HLDpeaktime_OSLD                            = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_OSLD)
+HLDpeaktimemin_OSLD                         = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin_OSLD)
 toc()
 
 # Based on the peak times, the minimum and maximum load is then found.
@@ -253,12 +248,14 @@ for(ii in 1:nscenarios) {
    OSLDloadmin_OSLD[,ii] = c(tempOSLD)
    
    #peak load per MSR  
-   tempMSR = Allprofiles[MSRpeaktime_OSLD[,ii],] * ScenariosperMSR[,,ii]
+   tempMSR = Allprofiles[MSRpeaktime_OSLD[,ii],] * ScenariosperMSR[,,ii] #doesn't work because MSRpeaktime_OSLD is not full rank because some MSRs cannot be connected to OS
+   tempMSR[is.na(tempMSR)] = 0
    tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]),tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
    MSRload_OSLD[,ii] = c(tempMSR)
    
    #minimum peak load per MSR (=maximum feedin)
    tempMSR = Allprofiles[MSRpeaktimemin_OSLD[,ii],] * ScenariosperMSR[,,ii]
+   tempMSR[is.na(tempMSR)] = 0
    tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]),tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
    MSRloadmin_OSLD[,ii] = c(tempMSR)
    

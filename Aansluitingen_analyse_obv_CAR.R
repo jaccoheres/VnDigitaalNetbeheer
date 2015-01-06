@@ -2,17 +2,17 @@ setwd("N:/Bottum Up Analyse/2. Data/3. Nettopologie")
 library(data.table)
 library(plyr)
 # Hoe goed is elke aansluitcategorie in beeld? ---------------------------------------------------------
-CAR    <- fread("CAR_E.csv",colClass="character")                   #inlezen alle EAN's
-PC4s   <- read.csv("N:/Bottum Up Analyse/2. Data/0. Gebiedsafbakening/Noord_Holland_PCzonderVelsen.csv",sep=";")
-PC6s   <- read.csv("N:/Bottum Up Analyse/2. Data/0. Gebiedsafbakening/Noord_Holland_PC6.csv",sep=";")
-GVBCDB <- read.csv("BAR_GIS_MH_NRG_GVB_AANSLUITING.csv",sep=";" ,colClasses=c(EAN_CODE="character"))
+CAR        <- fread("CAR_E.csv",colClass="character")                   #inlezen alle EAN's
+PC4s       <- read.csv("N:/Bottum Up Analyse/2. Data/0. Gebiedsafbakening/Noord_Holland_PCzonderVelsen.csv",sep=";")
+PC6s       <- read.csv("N:/Bottum Up Analyse/2. Data/0. Gebiedsafbakening/Noord_Holland_PC6.csv",sep=";")
+GVBCDB     <- read.csv("BAR_GIS_MH_NRG_GVB_AANSLUITING.csv",sep=";" ,colClasses=c(EAN_CODE="character"))
 EANStoHFD  <- read.csv("N:/Bottum Up Analyse/2. Data/1. Baseload KV/LS_HLD_AANSLUITING.csv",sep=";",dec=",",colClasses=c(EAN="character"))
 EANStoMSR  <- read.csv("N:/Bottum Up Analyse/2. Data/1. Baseload KV/MSR_AANSLUITING.csv",colClasses=c(EAN="character"))
 MEETPUNTCDB<- read.csv("MEETPUNT_cdb.csv",sep=";",dec=",")
 CDBGISMV   <- read.csv("N:/Bottum Up Analyse/2. Data/2. Baseload GV/CDB.GIS_MV.ssv",sep=";",dec=',')
 
-CAR    <- data.frame(CAR)
-GVBCDB <- data.frame(GVBCDB)
+CAR        <- data.frame(CAR)
+GVBCDB     <- data.frame(GVBCDB)
 
 sum(CAR$POSTCOD=="")                              # aantal postcodes onbekend
 CAR$PC4       <- substr(CAR$POSTCOD,1,4)          #PC4 aanmaken
