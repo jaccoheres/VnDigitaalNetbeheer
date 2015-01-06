@@ -85,13 +85,6 @@ HLDpeaktime_MSR      = matrix(nrow = nHLD,  ncol = nscenarios)
 HLDpeaktimemin_MSR   = matrix(nrow = nHLD,  ncol = nscenarios)
 OSLDpeaktime_MSR     = matrix(nrow = nOSLD, ncol = nscenarios)
 OSLDpeaktimemin_MSR  = matrix(nrow = nOSLD, ncol = nscenarios)
-=======
-MSRpeaktimetemp      = matrix(nrow = nMSR, ncol = 2*nscenarios)
-MSRpeaktime_MSR      = matrix(nrow = nMSR, ncol = nscenarios)
-MSRpeaktimemin_MSR   = matrix(nrow = nMSR, ncol = nscenarios)
-HLDpeaktime_MSR      = matrix(nrow = nHLD, ncol = nscenarios)
-HLDpeaktimemin_MSR   = matrix(nrow = nHLD, ncol = nscenarios)
->>>>>>> f98df07bbb2d627c2b38d3c6772221a59e376ad0
 
 print("--> Calculating peak timeS in network per MSR (2a/3)--")
 # Function is called using full number of CPUs set in DataPreparation.R

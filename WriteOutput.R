@@ -34,83 +34,159 @@ library(gmodels)
 print("--Loading data (1/3)--")
 load("CalculationOutput_NH_v2.RData")
 
-print("--Exporting to VISION (2/3)--")
 # Export to VISION ----------------------------------------------------------------------------------------------
-print("--Setting variables for VISION output (2a/3)--")
+print("--Exporting to VISION (2/3)--")
+print("--> Setting variables for VISION output (2a/3)--")
 # Vision requires a very specific output format
-indexlist      = match(MSRlist,Vnames$NR_Behuizing_NRG)        # Cannot match 362 stations
-Visionlist     = Vnames$ID_Vision[indexlist]                   # Sort the list of MSR's in the Vision order
-NAlist         = is.na(Visionlist)==FALSE                      # Create a list of MSR that have not been found
-exportnamelist = Visionlist[NAlist]                            # Only use the found MSR for the export
-# NAlist       = c(NAlist,NAlist*2,NAlist*3,NAlist*4)            
-MSRexport      = MSRload[NAlist,]
-MSRexportmin   = MSRloadmin[NAlist,]
-MSRmaxexport   = MSRmax[NAlist]
-nMSR           = length(exportnamelist)
-indexlist      = c(seq(1,nMSR*4*nscenarios,by=4),seq(2,nMSR*4*nscenarios,by=4),seq(3,nMSR*4*nscenarios,by=4),seq(4,nMSR*4*nscenarios,by=4))
-startyear      = 2014 #Sloppy! Needed to be declared here for output but should be moved to DataPreparation.R!!
-endyear        = 2030 #Sloppy! Needed to be declared here for output but should be moved to DataPreparation.R!!
-years          = seq(startyear,endyear)
-nyears         = length(years)
-datelist       = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(1,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
-timelist       = rep.int(9,nscenarios)
-exportbaseload = matrix(t(MSRexport)[indexlist],nscenarios,(nMSR*4))            # Reshape results for saving in Vision format
-#exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSR*4))     # Reshape results for saving in Vision format
+indexlist         = match(MSRlist,Vnames$NR_Behuizing_NRG)                 # Cannot match 362 stations
+Visionlist        = Vnames$ID_Vision[indexlist]                            # Sort the list of MSR's in the Vision order
+NAlist            = is.na(Visionlist)==FALSE                               # Create a list of MSR that have not been found
+exportnamelist    = Visionlist[NAlist]                                     # Only use the found MSR for the export         
+MSRexport         = MSRload_OSLD[NAlist,]
+MSRexportmin      = MSRloadmin_OSLD[NAlist,]
+MSRmaxexport      = MSRmax[NAlist]
+nMSRexport        = length(exportnamelist)
+indexlist         = c(seq(1,nMSRexport*4*nscenarios,by=4),seq(2,nMSRexport*4*nscenarios,by=4),seq(3,nMSRexport*4*nscenarios,by=4),seq(4,nMSRexport*4*nscenarios,by=4))
+startyear         = 2014                                                   # Sloppy! Needed to be declared here for output but should be moved to DataPreparation.R!!
+endyear           = 2030                                                   # Sloppy! Needed to be declared here for output but should be moved to DataPreparation.R!!
+years             = seq(startyear,endyear)
+datelist          = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(1,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
+datelistmin       = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(2,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
+timelist          = rep.int(9,nscenarios)
+exportbaseload    = matrix(t(MSRexport)[indexlist],nscenarios,(nMSR*4))     # Reshape results for saving in Vision format
+exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSR*4))  # Reshape results for saving in Vision format
 
+print("--> Casting output to data tables for csv write (2b/3)--")
 #Set VISION output files and column names
 exportname = c('Datum','Tijd',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep='')) #Setup the specific Vision names
-dt = data.table(datelist,timelist,exportbaseload)  #Convert exportmatrix to datatable because R is not capable enough to save matrices
-setnames(dt,exportname)             #Set the column names
-dt2 = data.table(scenarionumber)
-setnames(dt2,c('Year','PV scenario', 'EV scenario', 'WP scenario', 'peak time index', 'minimum time index'))
+dt = data.table(datelist,timelist,exportbaseload)           #Convert exportmatrix to datatable because R is not capable enough to save matrices
+dtmin = data.table(datelistmin,timelist,exportbaseloadmin)  #Convert exportmatrix to datatable because R is not capable enough to save matrices
+setnames(dt,exportname)                #Set the column names
+setnames(dtmin,exportname)             #Set the column names
+# dt2 = data.table(scenarionumber)
+# setnames(dt2,c('Year','PV scenario', 'EV scenario', 'WP scenario', 'peak time index', 'minimum time index'))
 
+print("--> Write csv's for VISION (2c/3)--")
 setwd(paste0(path,"/7. Output/1. VISION"))
-#write CSVs for VISION
-#for (ii in 0:(nscenarios/(4*nyears))-1) {
-#  dtprint = dt[(1+ii*(4*nyears)):((ii+1)*(4*nyears)),]
-#  name = paste0("MSRloadvision_",(1+ii*(4*nyears)),"-",((ii+1)*(4*nyears)),".csv")
-#  write.csv2(dtprint,name,row.names=FALSE)
-#}
+# write CSVs for VISION
+# TO DO! REPLACE NESTED FOR LOOPS BY RE-IMPLEMENTING SCENARIONUMBER IN DATAPREPARATION.R
+progressbar = txtProgressBar(min = 0, max = nscenarios/nyears, initial = 0, char = "=", style = 3)
+tic()
+scenarionamelist = c("Low","Med","High","Extr")
+index=1
+for (EVii in 1:nEVscen) {
+   for(PVii in 1:nPVscen) {
+      for(WPii in 1:nWPscen) {
+         setTxtProgressBar(progressbar,index)         
+         # First print results for maxload scenario
+         dtprint = dt[(1+(index-1)*nyears):(index*nyears),]
+         name = paste0(index,"a_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxload",".csv")
+         write.csv2(dtprint,name,row.names=FALSE)
+         
+         # Then for maxfeedin scenario
+         dtprint = dtmin[(1+(index-1)*nyears):(index*nyears),]
+         name = paste0(index,"b_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxfeedin",".csv")         
+         write.csv2(dtprint,name,row.names=FALSE)
+         index = index+1
+      }
+   }
+}
+toc()
+close(progressbar)
+# Write identifiers for scenarios
+# write.csv2(dt2, "Scenarioindex.csv",)
 
-write.csv2(dt[1:68,],"MSRloadvision_1.csv",row.names=FALSE)
-write.csv2(dt[69:136,],"MSRloadvision_2.csv",row.names=FALSE)
-write.csv2(dt[137:204,],"MSRloadvision_3.csv",row.names=FALSE)
-write.csv2(dt[205:272,],"MSRloadvision_4.csv",row.names=FALSE)
-write.csv2(dt[273:340,],"MSRloadvision_5.csv",row.names=FALSE)
-write.csv2(dt[341:408,],"MSRloadvision_6.csv",row.names=FALSE)
-write.csv2(dt[409:476,],"MSRloadvision_7.csv",row.names=FALSE)
-write.csv2(dt[477:544,],"MSRloadvision_8.csv",row.names=FALSE)
-write.csv2(dt[545:612,],"MSRloadvision_9.csv",row.names=FALSE)
-write.csv2(dt[613:680,],"MSRloadvision_10.csv",row.names=FALSE)
-write.csv2(dt[681:748,],"MSRloadvision_11.csv",row.names=FALSE)
-write.csv2(dt[749:816,],"MSRloadvision_12.csv",row.names=FALSE)
 
-write.csv2(dt2, "Scenarioindex.csv",)
+# Export to Finance output ----------------------------------------------------------------------------------
+print("--Write export for finance (3/3)--")
+setwd(paste0(path,"/7. Output/2. Finance"))
+print("--> Defining scenarios for finance output (3a/3)--")
+nFinscen      = 3
+Fin_maxfeedin = c(1,3,1)  #[Low EV, high PV, low WP]
+Fin_average   = c(2,2,2)  #[medium EV, medium PV, medium WP]
+Fin_maxload   = c(4,1,3)  #[High EV, low PV, High WP]
+Fin_scen      = rbind(Fin_maxfeedin,Fin_average,Fin_maxload)
 
-# Export to Excel for analysis ----------------------------------------------------------------------------------
-#Presentation_maxfeedin = [high PV, Low EV, low WP] = [3,1,1]
-#Presentation_average = [medium PV, medium EV, medium WP] = [1,3,4]
-#Presentation_maxload = [low PV, High EV, High WP] = [2,2,2]
-#select correct rows from output. 
-setwd(path)
-Presentation_maxload =  c(1,3,4) #[medium PV, medium EV, medium WP]
-Presentation_average = c(2,2,2) #[low PV, High EV, High WP]
-Presentation_maxfeedin = c(3,1,1) #[high PV, Low EV, low WP]
-index_maxload = seq(1 + ((Presentation_maxload[1]-1)* (nscenarios/3)) + ((Presentation_maxload[2]-1)* (nscenarios/12)) + ((Presentation_maxload[3]-1)* (nscenarios/48)),length.out=17)
-index_average = seq(1 + ((Presentation_average[1]-1)* (nscenarios/3)) + ((Presentation_average[2]-1)* (nscenarios/12)) + ((Presentation_average[3]-1)* (nscenarios/48)),length.out=17)
-index_maxfeedin = seq(1 + ((Presentation_maxfeedin[1]-1)* (nscenarios/3)) + ((Presentation_maxfeedin[2]-1)* (nscenarios/12)) + ((Presentation_maxfeedin[3]-1)* (nscenarios/48)),length.out=17)
-index_scenarios = c(index_maxload,index_average,index_maxfeedin)
+print("--> Casting output to data tables for csv write  (3b/3)--")
+MSRexport       = MSRload_MSR
+MSRexportmin    = MSRloadmin_MSR
+HLDexport       = HLDload_MSR
+HLDexportmin    = HLDloadmin_MSR
+scenarionamelist = c("Low","Med","High","Extr") #PUT IN DATAPREPARATION.R!!!
 
-MSRmaxexportaangevuld = c(MSRmaxexport,rep(0,3*nMSR))
+scenariolistMSR = c()
+scenariocountMSR = c()
+scenariolistHLD = c()
+scenariocountHLD = c()
+scenariolist     = c()
+scenariocount    = c()
 
-dt = data.table(scenarionumber[index_scenarios,1:4],exportbaseload[index_scenarios,])
-exportname = c('Jaar','PV scenario','EV scenario','WP scenario',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep=''))
-dt = data.table(exportname,c(0,0,0,0,MSRmaxexportaangevuld),t(dt))
-write.csv2(dt , "AnalysisresultsMSRmax.csv",row.names=FALSE)
+for (i in 1:nFinscen) {
+   name     = paste0("EV",scenarionamelist[Fin_scen[i,1]],"_PV",scenarionamelist[Fin_scen[i,2]],"_WP",scenarionamelist[Fin_scen[i,3]])
+   nameMSR = rep(name,nMSR)
+   nameHLD = rep(name,nHLD)
+   scenariolistMSR = append(scenariolistMSR,nameMSR)
+   scenariolistHLD = append(scenariolistHLD,nameHLD)
+   scenariocountMSR = append(scenariocountMSR,rep(i,nMSR))
+   scenariocountHLD = append(scenariocountHLD,rep(i,nHLD))
+}
 
-dt = data.table(scenarionumber[index_scenarios,1:4],exportbaseloadmin[index_scenarios,])
-exportname = c('Jaar','PV scenario','EV scenario','WP scenario',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep=''))
-dt = data.table(exportname,c(0,0,0,0,MSRmaxexportaangevuld),t(dt))
-write.csv2(dt , "AnalysisresultsMSRmin.csv",row.names=FALSE)
+scenariolist  = c(scenariolistMSR,scenariolistHLD)
+scenariocount = c(scenariocountMSR,scenariocountHLD)
+emptycol      = rep("",length(scenariolist))
+net           = c(rep("MS",length(scenariolistMSR)),rep("LS",length(scenariolistHLD)))
+type          = c(rep("trafo",length(scenariolistMSR)),rep("Kabel",length(scenariolistHLD)))
+assetID       = c(rep(MSRlist,nFinscen),rep(HLD,nFinscen))
+#TO DO cablelength
+#TO DO maxCap
+
+# dt = data.table(emptycol,
+#                 scenariocount,
+#                 net,
+#                 type,
+#                 assetID,
+#                 cablelength,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 maxCap,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 emptycol,
+#                 data (basex17,EVx17,PVx17,WPx17)
+#                 )           
+
+
+
+# # Export to Excel for analysis ----------------------------------------------------------------------------------
+# #Presentation_maxfeedin = [high PV, Low EV, low WP] = [3,1,1]
+# #Presentation_average = [medium PV, medium EV, medium WP] = [1,3,4]
+# #Presentation_maxload = [low PV, High EV, High WP] = [2,2,2]
+# #select correct rows from output. 
+# setwd(path)
+# Presentation_maxload =  c(1,3,4) #[medium PV, medium EV, medium WP]
+# Presentation_average = c(2,2,2) #[low PV, High EV, High WP]
+# Presentation_maxfeedin = c(3,1,1) #[high PV, Low EV, low WP]
+# index_maxload = seq(1 + ((Presentation_maxload[1]-1)* (nscenarios/3)) + ((Presentation_maxload[2]-1)* (nscenarios/12)) + ((Presentation_maxload[3]-1)* (nscenarios/48)),length.out=17)
+# index_average = seq(1 + ((Presentation_average[1]-1)* (nscenarios/3)) + ((Presentation_average[2]-1)* (nscenarios/12)) + ((Presentation_average[3]-1)* (nscenarios/48)),length.out=17)
+# index_maxfeedin = seq(1 + ((Presentation_maxfeedin[1]-1)* (nscenarios/3)) + ((Presentation_maxfeedin[2]-1)* (nscenarios/12)) + ((Presentation_maxfeedin[3]-1)* (nscenarios/48)),length.out=17)
+# index_scenarios = c(index_maxload,index_average,index_maxfeedin)
+# 
+# MSRmaxexportaangevuld = c(MSRmaxexport,rep(0,3*nMSR))
+# 
+# dt = data.table(scenarionumber[index_scenarios,1:4],exportbaseload[index_scenarios,])
+# exportname = c('Jaar','PV scenario','EV scenario','WP scenario',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep=''))
+# dt = data.table(exportname,c(0,0,0,0,MSRmaxexportaangevuld),t(dt))
+# write.csv2(dt , "AnalysisresultsMSRmax.csv",row.names=FALSE)
+# 
+# dt = data.table(scenarionumber[index_scenarios,1:4],exportbaseloadmin[index_scenarios,])
+# exportname = c('Jaar','PV scenario','EV scenario','WP scenario',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep=''))
+# dt = data.table(exportname,c(0,0,0,0,MSRmaxexportaangevuld),t(dt))
+# write.csv2(dt , "AnalysisresultsMSRmin.csv",row.names=FALSE)
 
 print("--Done! Its ARRRrrrresome!--")
