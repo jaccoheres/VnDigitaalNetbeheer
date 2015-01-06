@@ -40,17 +40,17 @@ path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 
 ################################################################################ Initialise variables and load data 
 print("--Initializing basic variables (1a/6)--")
-nyears = 17
+nyears  = 17
 nEVscen = 4
 nPVscen = 3
 nWPscen = 3
-nCPUs = 4
+nCPUs   = 4
 
 print("--Loading data (1b/6)--")
 # Asset management network data
 setwd(paste0(path,"/1. Baseload KV"))
 Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)#, sep = ";", dec="," ,colClasses = "character", stringsAsFactors=FALSE, header = TRUE)
-MSR   = read.table("MSR_AANSLUITING.csv"                          , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+MSR    = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 EDSN   = read.table("EDSN.csv"                                    , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 # KVonb   = read.table("KVonbekendeHLD.csv"                       , sep = "|", dec="," ,colClasses = "character", header = TRUE)
 MSRonb  = read.table("KVonbekendeMSR.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
@@ -59,7 +59,7 @@ setwd(paste0(path,"/4. Kabel en MSR-gegevens"))
 HLDcap  = read.table("LS_kabel_bonoka.txt"                             , sep = "|", dec="," ,colClasses = "character", header = TRUE)
 MSRcap  = read.table("MSRgegevens_bonoka.csv"                          , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 HLDspec = read.table("Match kabeltypes NHN.csv"                        , sep = ";", dec="," ,colClasses = "character", header = TRUE)
-Vnames = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv" , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv" , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 
 setwd(paste0(path,"/2. Baseload GV"))
 GV        = read.table("GVBaseloadsaanstations.csv"                      , sep = ",", dec="," ,colClasses = "character", header = TRUE)
@@ -251,17 +251,17 @@ print("--Filling sparse connection matrix for HLD to MSR (3b/6)--")
 HLDtoMSRlist= MSR$HOOFDLEIDING              # Retrieve the HLD cables connected to each User
 
 indexlist    = match(HLD,HLDtoMSRlist)      # Search for HLD_IDs in HLD_MSR list
-MSRwithHLD  = MSR$MSR[indexlist]            # Get the MSR IDs for the corresponding HLDs
+MSRwithHLD   = MSR$MSR[indexlist]            # Get the MSR IDs for the corresponding HLDs
 MSRindexlist = match(MSRwithHLD,MSRlist)    # Find the MSR index for each MSR ID
 NANlist      = is.na(MSRindexlist)==FALSE   # Remove all NA's (i.e. HLDs which are not matched)
 
 #Create connection matrix
 HLDindex     = 1:length(HLD)
 HLDNANindex  = HLDindex[NANlist]
-i = MSRindexlist[NANlist]
-j = HLDNANindex
-v = matrix(1,length(HLDNANindex),1)
-HLDtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = max(j),dimnames = NULL)
+i            = MSRindexlist[NANlist]
+j            = HLDNANindex
+v            = matrix(1,length(HLDNANindex),1)
+HLDtoMSR     = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = max(j),dimnames = NULL)
 
 # Create GV to MSR connection matrix
 print("--Filling sparse connection matrix for GV to MSR (3c/6)--")
@@ -289,10 +289,10 @@ NANlist        = is.na(OSLDindexlist)==FALSE    # Remove all NA's (i.e. MSRs whi
 #Create connection matrix
 MSRindex     = 1:length(MSRlist)
 MSRNANindex  = MSRindex[NANlist]
-i = OSLDindexlist[NANlist]
-j = MSRNANindex
-v = matrix(1,length(MSRNANindex),1)
-MSRtoOSLD = simple_triplet_matrix(i, j, v, nrow = length(OSLD), ncol = max(j),dimnames = NULL)
+i            = OSLDindexlist[NANlist]
+j            = MSRNANindex
+v            = matrix(1,length(MSRNANindex),1)
+MSRtoOSLD    = simple_triplet_matrix(i, j, v, nrow = length(OSLD), ncol = max(j),dimnames = NULL)
 
 # Create OS Field TO OS connection matrix
 print("--Filling sparse connection matrix for OS Field to OS (3e/6)--")
@@ -307,10 +307,10 @@ NANlist        = is.na(OSindexlist)==FALSE    # Remove all NA's (i.e. OSLDs whic
 #Create connection matrix
 OSLDindex     = 1:length(OSLD)
 OSLDNANindex  = OSLDindex[NANlist]
-i = OSindexlist[NANlist]
-j = OSLDNANindex
-v = matrix(1,length(OSLDNANindex),1)
-OSLDtoOS = simple_triplet_matrix(i, j, v, nrow = length(OS), ncol = length(OSLD),dimnames = NULL)
+i             = OSindexlist[NANlist]
+j             = OSLDNANindex
+v             = matrix(1,length(OSLDNANindex),1)
+OSLDtoOS      = simple_triplet_matrix(i, j, v, nrow = length(OS), ncol = length(OSLD),dimnames = NULL)
 
 ############## Create other useful interconnection matrices from 'base' interconnection matrices
 print("--Create other required interconnection matrices (3f/6)--")
@@ -344,7 +344,7 @@ dfHLDmax  = ddply(dfLSLDmax, .(HOOFDLEIDING), summarise, MaxCap = max(capaciteit
 dfHLDlist = data.frame("HOOFDLEIDING"=HLD)                                         #Cast HLD to dataframe for joining                                                              
 dfHLDlist = join(dfHLDlist,dfHLDmax,by="HOOFDLEIDING")                             #Join HLDlist with HLDmax                                              
 HLDmax    = dfHLDlist$MaxCap                                                                                 
-HLDmax[is.na(HLDmax)]=0                                                            #Set is.na's to 0 (from incomplete match between HLDlist and HLDmax)
+HLDmax[is.na(HLDmax)] = 0                                                            #Set is.na's to 0 (from incomplete match between HLDlist and HLDmax)
 
 #cleanup variables
 rm(Imax, dfLSLDmax,dfHLDlist)                    

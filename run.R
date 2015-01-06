@@ -77,11 +77,21 @@ ParPeaktimeCalculationperOSLD <- function(iter,nparscenarios) {
 
 print("--Calculation based on peaktime per MSR (2/3)--")
 # Initialise matrices which will hold the peak time and minimum peak time (feedin) per MSR 
+<<<<<<< HEAD
+MSRpeaktimetemp      = matrix(nrow = nMSR,  ncol = 2*nscenarios)
+MSRpeaktime_MSR      = matrix(nrow = nMSR,  ncol = nscenarios)
+MSRpeaktimemin_MSR   = matrix(nrow = nMSR,  ncol = nscenarios)
+HLDpeaktime_MSR      = matrix(nrow = nHLD,  ncol = nscenarios)
+HLDpeaktimemin_MSR   = matrix(nrow = nHLD,  ncol = nscenarios)
+OSLDpeaktime_MSR     = matrix(nrow = nOSLD, ncol = nscenarios)
+OSLDpeaktimemin_MSR  = matrix(nrow = nOSLD, ncol = nscenarios)
+=======
 MSRpeaktimetemp      = matrix(nrow = nMSR, ncol = 2*nscenarios)
 MSRpeaktime_MSR      = matrix(nrow = nMSR, ncol = nscenarios)
 MSRpeaktimemin_MSR   = matrix(nrow = nMSR, ncol = nscenarios)
 HLDpeaktime_MSR      = matrix(nrow = nHLD, ncol = nscenarios)
 HLDpeaktimemin_MSR   = matrix(nrow = nHLD, ncol = nscenarios)
+>>>>>>> f98df07bbb2d627c2b38d3c6772221a59e376ad0
 
 print("--> Calculating peak timeS in network per MSR (2a/3)--")
 # Function is called using full number of CPUs set in DataPreparation.R
@@ -109,7 +119,7 @@ rm(MSRpeaktimetemp)
 print("--> Cascading peak times per MSR to HLDs (2b/3)--")
 # Peak time per HLD is calculated by using MSRtoHLD interconnection matrices
 tic()
-HLDpeaktime_MSR   = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_MSR)
+HLDpeaktime_MSR     = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_MSR)
 HLDpeaktimemin_MSR  = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin_MSR)
 toc()
 
