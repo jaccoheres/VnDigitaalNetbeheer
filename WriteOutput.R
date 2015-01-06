@@ -29,11 +29,13 @@ library(ggplot2)
 library(gmodels)
 
 #Load data (To generate this data: run Run.R)
-print("--Loading data--")
+print("--Loading data (1/3)--")
 load("CalculationOutput_NH_v2.RData")
 
+print("--Exporting to VISION (2/3)--")
 # Export to VISION ----------------------------------------------------------------------------------------------
-# Vision requires a very specific output format. The script is quick & dirty. At least some of it is commented!
+print("--Setting variables for VISION output (2a/3)--")
+# Vision requires a very specific output format
 indexlist      = match(MSRlist,Vnames$NR_Behuizing_NRG)        # Cannot match 362 stations
 Visionlist     = Vnames$ID_Vision[indexlist]                   # Sort the list of MSR's in the Vision order
 NAlist         = is.na(Visionlist)==FALSE                      # Create a list of MSR that have not been found
@@ -50,7 +52,7 @@ years          = seq(startyear,endyear)
 nyears         = length(years)
 datelist       = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(1,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
 timelist       = rep.int(9,nscenarios)
-exportbaseload = matrix(t(MSRexport)[indexlist],nscenarios,(nMSR*4))     # Reshape results for saving in Vision format
+exportbaseload = matrix(t(MSRexport)[indexlist],nscenarios,(nMSR*4))            # Reshape results for saving in Vision format
 #exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSR*4))     # Reshape results for saving in Vision format
 
 #Set VISION output files and column names
