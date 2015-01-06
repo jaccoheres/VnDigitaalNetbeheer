@@ -47,55 +47,52 @@ MSRexportmin      = MSRloadmin_OSLD[NAlist,]
 MSRmaxexport      = MSRmax[NAlist]
 nMSRexport        = length(exportnamelist)
 indexlist         = c(seq(1,nMSRexport*4*nscenarios,by=4),seq(2,nMSRexport*4*nscenarios,by=4),seq(3,nMSRexport*4*nscenarios,by=4),seq(4,nMSRexport*4*nscenarios,by=4))
-startyear         = 2014                                                   # Sloppy! Needed to be declared here for output but should be moved to DataPreparation.R!!
-endyear           = 2030                                                   # Sloppy! Needed to be declared here for output but should be moved to DataPreparation.R!!
 years             = seq(startyear,endyear)
 datelist          = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(1,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
 datelistmin       = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(2,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
 timelist          = rep.int(9,nscenarios)
-exportbaseload    = matrix(t(MSRexport)[indexlist],nscenarios,(nMSR*4))     # Reshape results for saving in Vision format
-exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSR*4))  # Reshape results for saving in Vision format
+exportbaseload    = matrix(t(MSRexport)[indexlist],nscenarios,(nMSRexport*4))     # Reshape results for saving in Vision format
+exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSRexport*4))  # Reshape results for saving in Vision format
 
 print("--> Casting output to data tables for csv write (2b/3)--")
 #Set VISION output files and column names
 exportname = c('Datum','Tijd',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep='')) #Setup the specific Vision names
 dt = data.table(datelist,timelist,exportbaseload)           #Convert exportmatrix to datatable because R is not capable enough to save matrices
 dtmin = data.table(datelistmin,timelist,exportbaseloadmin)  #Convert exportmatrix to datatable because R is not capable enough to save matrices
-setnames(dt,exportname)                #Set the column names
-setnames(dtmin,exportname)             #Set the column names
-# dt2 = data.table(scenarionumber)
-# setnames(dt2,c('Year','PV scenario', 'EV scenario', 'WP scenario', 'peak time index', 'minimum time index'))
+setnames(dt,exportname)                                     #Set the column names
+setnames(dtmin,exportname)                                  #Set the column names
+dt2 = data.table(scenarionumber)
+setnames(dt2,c('Scenario index','EV scenario', 'PV scenario', 'WP scenario'))
+scenarioindex = scenarionumber[,1]
 
 print("--> Write csv's for VISION (2c/3)--")
 setwd(paste0(path,"/7. Output/1. VISION"))
 # write CSVs for VISION
-# TO DO! REPLACE NESTED FOR LOOPS BY RE-IMPLEMENTING SCENARIONUMBER IN DATAPREPARATION.R
-progressbar = txtProgressBar(min = 0, max = nscenarios/nyears, initial = 0, char = "=", style = 3)
+progressbar = txtProgressBar(min = 0, max = length(scenarioindex), initial = 0, char = "=", style = 3)
 tic()
-scenarionamelist = c("Low","Med","High","Extr")
-index=1
-for (EVii in 1:nEVscen) {
-   for(PVii in 1:nPVscen) {
-      for(WPii in 1:nWPscen) {
-         setTxtProgressBar(progressbar,index)         
-         # First print results for maxload scenario
-         dtprint = dt[(1+(index-1)*nyears):(index*nyears),]
-         name = paste0(index,"a_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxload",".csv")
-         write.csv2(dtprint,name,row.names=FALSE)
-         
-         # Then for maxfeedin scenario
-         dtprint = dtmin[(1+(index-1)*nyears):(index*nyears),]
-         name = paste0(index,"b_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxfeedin",".csv")         
-         write.csv2(dtprint,name,row.names=FALSE)
-         index = index+1
-      }
-   }
+for (ii in scenarioindex) {
+  setTxtProgressBar(progressbar,ii)
+  
+  # First look up scenarios in vector scenarionumber
+  EVii = scenarionumber[ii,2]  
+  PVii = scenarionumber[ii,3] 
+  WPii = scenarionumber[ii,4] 
+           
+  # Then print results for maxload scenario
+  dtprint = dt[(1+(ii-1)*nyears):(ii*nyears),]
+  name = paste0(ii,"a_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxload",".csv")
+  write.csv2(dtprint,name,row.names=FALSE)
+  
+  # And then for maxfeedin scenario
+  dtprint = dtmin[(1+(ii-1)*nyears):(ii*nyears),]
+  name = paste0(ii,"b_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxfeedin",".csv")         
+  write.csv2(dtprint,name,row.names=FALSE)
 }
 toc()
 close(progressbar)
-# Write identifiers for scenarios
-# write.csv2(dt2, "Scenarioindex.csv",)
 
+# Write identifiers for scenarios
+write.csv2(dt2, "Scenarioindex.csv",)
 
 # Export to Finance output ----------------------------------------------------------------------------------
 print("--Write export for finance (3/3)--")
@@ -105,30 +102,37 @@ nFinscen      = 3
 Fin_maxfeedin = c(1,3,1)  #[Low EV, high PV, low WP]
 Fin_average   = c(2,2,2)  #[medium EV, medium PV, medium WP]
 Fin_maxload   = c(4,1,3)  #[High EV, low PV, High WP]
-Fin_scen      = rbind(Fin_maxfeedin,Fin_average,Fin_maxload)
+Finscen       = rbind(Fin_maxfeedin,Fin_average,Fin_maxload)
 
 print("--> Casting output to data tables for csv write  (3b/3)--")
-MSRexport       = MSRload_MSR
-MSRexportmin    = MSRloadmin_MSR
-HLDexport       = HLDload_MSR
-HLDexportmin    = HLDloadmin_MSR
-scenarionamelist = c("Low","Med","High","Extr") #PUT IN DATAPREPARATION.R!!!
+MSRexport        = MSRload_MSR
+MSRexportmin     = MSRloadmin_MSR
+HLDexport        = HLDload_MSR
+HLDexportmin     = HLDloadmin_MSR
+scenarionamelist = c("Low","Med","High","Extr") 
 
-scenariolistMSR = c()
+scenariolistMSR  = c()
 scenariocountMSR = c()
-scenariolistHLD = c()
+scenariolistHLD  = c()
 scenariocountHLD = c()
 scenariolist     = c()
 scenariocount    = c()
+Fin_index        = c()
 
 for (i in 1:nFinscen) {
-   name     = paste0("EV",scenarionamelist[Fin_scen[i,1]],"_PV",scenarionamelist[Fin_scen[i,2]],"_WP",scenarionamelist[Fin_scen[i,3]])
+   name     = paste0("EV",scenarionamelist[Finscen[i,1]],"_PV",scenarionamelist[Finscen[i,2]],"_WP",scenarionamelist[Finscen[i,3]])
    nameMSR = rep(name,nMSR)
    nameHLD = rep(name,nHLD)
    scenariolistMSR = append(scenariolistMSR,nameMSR)
    scenariolistHLD = append(scenariolistHLD,nameHLD)
    scenariocountMSR = append(scenariocountMSR,rep(i,nMSR))
    scenariocountHLD = append(scenariocountHLD,rep(i,nHLD))
+   index_start      = 1 + nyears * (
+                      ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
+                      ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
+                      ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
+   index_end        = index_start + nyears - 1
+   Fin_index        = cbind(Fin_index, seq(index_start,index_end))
 }
 
 scenariolist  = c(scenariolistMSR,scenariolistHLD)
@@ -137,29 +141,24 @@ emptycol      = rep("",length(scenariolist))
 net           = c(rep("MS",length(scenariolistMSR)),rep("LS",length(scenariolistHLD)))
 type          = c(rep("trafo",length(scenariolistMSR)),rep("Kabel",length(scenariolistHLD)))
 assetID       = c(rep(MSRlist,nFinscen),rep(HLD,nFinscen))
-#TO DO cablelength
-#TO DO maxCap
+length        = c(rep("",(nFinscen*nMSR)),rep(HLDlength,nFinscen))
+maxCap        = c(rep(MSRmax,nFinscen),rep(HLDmax,nFinscen))
 
-# dt = data.table(emptycol,
-#                 scenariocount,
-#                 net,
-#                 type,
-#                 assetID,
-#                 cablelength,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 maxCap,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 emptycol,
-#                 data (basex17,EVx17,PVx17,WPx17)
-#                 )           
+# Select correct scenarios from output and cast to wide format required for finance
+MSRexport     = MSRexport[,Fin_index]
+dfMSRexport   = data.frame("MSR"=rep(MSRlist,4),"belasting"=c(rep("base",nMSR),rep("EV",nMSR),rep("PV",nMSR),rep("WP",nMSR)),MSRexport)
+dfMSRexport   = dcast(dfMSRexport, MSR~belasting) #fix
+
+dt = data.table(emptycol,
+                scenariocount,
+                net,
+                type,
+                assetID,
+                length,
+                scenariolist,
+                emptycol,emptycol,emptycol,emptycol,
+                maxCap,
+                emptycol,emptycol,emptycol,emptycol,emptycol,emptycol)
 
 
 

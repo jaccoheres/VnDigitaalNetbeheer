@@ -40,11 +40,12 @@ path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 
 ################################################################################ Initialise variables and load data 
 print("--Initializing basic variables (1a/6)--")
-nyears  = 17
-nEVscen = 4
-nPVscen = 3
-nWPscen = 3
-nCPUs   = 4
+startyear = 2014
+endyear   = 2030
+nEVscen   = 4
+nPVscen   = 3
+nWPscen   = 3
+nCPUs     = 4
 
 print("--Loading data (1b/6)--")
 # Asset management network data
@@ -56,7 +57,7 @@ EDSN   = read.table("EDSN.csv"                                    , sep = ",", d
 MSRonb  = read.table("KVonbekendeMSR.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 
 setwd(paste0(path,"/4. Kabel en MSR-gegevens"))
-HLDcap  = read.table("LS_kabel_bonoka.txt"                             , sep = "|", dec="," ,colClasses = "character", header = TRUE)
+HLDcap  = read.table("LS_kabel_bonoka.txt"                             , sep = "|", dec="." , header = TRUE)
 MSRcap  = read.table("MSRgegevens_bonoka.csv"                          , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 HLDspec = read.table("Match kabeltypes NHN.csv"                        , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv" , sep = ";", dec="," ,colClasses = "character", header = TRUE)
@@ -327,8 +328,8 @@ MSRtoHLD  = t(HLDtoMSR)
 OSLDtoMSR = t(MSRtoOSLD)
 
 ############## Find max capacity for HLD and MSR
-print("--Find max capacity for HLD and MSR (3g/6)--")
-# Calculate maximum capacity of each HLD
+print("--Find max capacity for HLD and MSR and HLD length (3g/6)--")
+# Calculate maximum capacity and length of each HLD
 # NOTE: this assumes that the cable with the highest capacity in an LS_HLD gets the maximum load. To be refined based on better net-topological model
 
 #Find the correct HLD type 
@@ -338,13 +339,19 @@ indexlist = match(HLDcap$UITVOERING,HLDspec$UITVOERING)
 Imax = as.numeric(HLDspec$Min.van.Inom2[indexlist])                                                       
 Imax[is.na(Imax)] = 0                     
 
-dfLSLDmax = data.frame(HOOFDLEIDING=HLDcap$HOOFDLEIDING,                           #Create data frame for matching and summarizing.
-                       capaciteit=0.4*Imax*(1/sqrt(3)))   
-dfHLDmax  = ddply(dfLSLDmax, .(HOOFDLEIDING), summarise, MaxCap = max(capaciteit))  #Find maximum capacity per LS_HLD.                                              
-dfHLDlist = data.frame("HOOFDLEIDING"=HLD)                                         #Cast HLD to dataframe for joining                                                              
-dfHLDlist = join(dfHLDlist,dfHLDmax,by="HOOFDLEIDING")                             #Join HLDlist with HLDmax                                              
-HLDmax    = dfHLDlist$MaxCap                                                                                 
-HLDmax[is.na(HLDmax)] = 0                                                            #Set is.na's to 0 (from incomplete match between HLDlist and HLDmax)
+dfLSLDmax = data.frame(HOOFDLEIDING = HLDcap$HOOFDLEIDING,        # Create data frame for matching and summarizing.
+                       LENGTE       = HLDcap$SYSTEEM_LENGTE,
+                       capaciteit   = 0.4*Imax*(1/sqrt(3)))   
+dfHLDmax  = ddply(dfLSLDmax, .(HOOFDLEIDING), summarise,          # Find maximum capacity and total cable length
+                  MaxCap = max(capaciteit),                       # per LS_HLD
+                  length = sum(LENGTE))                                                                                            
+dfHLDlist = data.frame("HOOFDLEIDING"=HLD)                        # Cast HLD to dataframe for joining                                                              
+dfHLDlist = join(dfHLDlist,dfHLDmax,by="HOOFDLEIDING")            # Join HLDlist with HLDmax                                              
+HLDmax    = dfHLDlist$MaxCap
+HLDlength = dfHLDlist$length
+HLDmax[is.na(HLDmax)]       = 0                                   # Set is.na's to 0 (from incomplete match between HLDlist and HLDmax)
+HLDlength[is.na(HLDlength)] = 0                                   # Set is.na's to 0 (from incomplete match between HLDlist and HLDmax)
+
 
 #cleanup variables
 rm(Imax, dfLSLDmax,dfHLDlist)                    
@@ -408,23 +415,26 @@ rm(PVallmat,WPallmat,WPKMPC6,PVKMPC6)
 ################################################### Calculating peak time
 print("--Generate scenario list (5b/6)--")
 #Generate the scenario list in the correct order for easy export
-nOSLD      = dim(PC6toOSLD)[1]
-nMSR       = dim(PC6toMSR)[1]
-nHLD       = dim(PC6toHLD)[1]
-nscenarios = nyears*nEVscen*nPVscen*nWPscen
+nOSLD            = dim(PC6toOSLD)[1]
+nMSR             = dim(PC6toMSR)[1]
+nHLD             = dim(PC6toHLD)[1]
+nyears           = endyear - (startyear-1)
+nscenarios       = nyears*nEVscen*nPVscen*nWPscen
+scenarionamelist = c("Low","Med","High","Extr")
 
 ### Initialize matrices which will hold scenario's per PC6 HLD and MSR
 tempScenariosperPC6  = matrix(NA, length(PC6),nprofiles)        
 ScenariosperHLD      = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nHLD ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 ScenariosperMSR      = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 ScenariosperOSLD     = array(NA, c(nOSLD,nprofiles,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+scenarionumber       = c()
 
 index = 1
 progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 # Create matrices which hold the SJV and number of EV, PV and WP per HLD and MSR
 for (EVii in 1:nEVscen) {
   for(PVii in 1:nPVscen) {
-    for(WPii in 1:nWPscen) {
+    for(WPii in 1:nWPscen) {     
       for(yearii in 1:nyears) {
         setTxtProgressBar(progressbar,index)
         # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
@@ -434,9 +444,11 @@ for (EVii in 1:nEVscen) {
         ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
         ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
         ScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempScenariosperPC6)
+        
         index = index + 1
-        # TODO: Add GV
-      }
+      } 
+      #Scenarionumber: indexnumber, PV scenario, EV scenario, WP scenario, 
+      scenarionumber = rbind(scenarionumber,c((index-1)/nyears,EVii,PVii,WPii))      
     }
   }
 }
