@@ -46,10 +46,15 @@ GVBCDB                      <-  transform(GVBCDB, freq.seg = ave(seq(nrow(GVBCDB
 #Koppelen met SJV
 CDBGISMV$M_TIMESTAMP  <- as.Date(as.character(CDBGISMV$M_TIMESTAMP), format= "%d-%m-%y")
 SJVuitCDB             <- ddply(CDBGISMV[which(CDBGISMV$M_TIMESTAMP>=as.Date("2013-01-01") & CDBGISMV$M_TIMESTAMP<=as.Date("2013-12-31")),],
-                               "M_POINT",summarise,SJVCDB=12*mean(M_VALUE,na.rm=T))
+                               "M_POINT",summarise,CDBMV=sum(M_VALUE,na.rm=T),SJVCDB=sum(M_VALUE,na.rm=T),freq=sum(is.na(M_VALUE)))
+SJVuitCDB$SJVCDB      <- 12*SJVuitCDB$CDBMV/SJVuitCDB$freq
+  
+#GVBCDB                <- merge(GVBCDB,SJVuitCDB,by.x="m_point",by.y="M_POINT",all.x=T)
 
-GVBCDB                <- merge(GVBCDB,SJVuitCDB,by.x="m_point",by.y="M_POINT",all.x=T)
-GVBCDB$SJVCDB[is.na(GVBCDB$SJVCDB)]  <-   CARNHNGV$totaal_verbruik[which(CARNHNGV$EAN_CODE_AANSLUITING %in% GVBCDB$EAN_CODE[is.na(GVBCDB$SJVCDB)])]
+#Koppelen met SJV's uit CAR
+GVBCDB                <- merge(GVBCDB,CARNHNGV[,c("EAN_CODE_AANSLUITING","totaal_verbruik")],by.x="EAN_CODE",by.y="EAN_CODE_AANSLUITING",all.x=T)
+names(GVBCDB)[names(GVBCDB)=="totaal_verbruik"] <- "SJVtot"
+
 #names(GVBCDB)[56] <- "SJVCDB"
 #berekenen maximum fractie profielen
 maxima                <- data.frame(apply(profielen,2,max,na.rm=T)[c("P1","P2","P4","P7","P8","P10","P13","P14","P19","P20")])
@@ -60,9 +65,16 @@ maximaEDSN            <- data.frame(apply(profielenEDSN,2,max,na.rm=T))
 
 
 GVBCDB                <- merge(GVBCDB,maxima,by.x="KVKSEGMENT",by.y="profnummer",all.x=T)
+GVBCDB$maxfrac        <- as.character(GVBCDB$maxfrac)
+GVBCDB$maxfrac[is.na(GVBCDB$maxfrac)] <- "6.659e-05"
 GVBCDB$maxfrac        <- as.numeric(GVBCDB$maxfrac)
-GVBCDB$maxfrac[is.na(GVBCDB$maxfrac)] <- 6.659e-05
-class(GVBCDB$maxfrac)
+
+GVBCDB$maxfrac2       <- apply(GVBCDB,1,function(x){max(GVBCDB$maxfrac[which(GVBCDB$EAN_CODE==x[c("EAN_CODE")])])})
+
+#totale piekvermogen GV
+sum(GVBCDB$maxfrac2*GVBCDB$SJVtot,na.rm=T)
+
+write.csv(GVBCDB[-duplicated(GVBCDB$EAN_CODE),],file="N:/Bottum Up Analyse/2. Data/2. Baseload GV/GVBaseloadsaanstations.csv")
 
 names(profielen)
 names(GVBCDB)

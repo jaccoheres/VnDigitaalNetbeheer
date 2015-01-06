@@ -82,7 +82,7 @@ length(unique(lskastmsr3$lskast3))
 
 
 #inlezen eans
-EANStoHFD  <- read.csv("N:/Bottum Up Analyse/2. Data/1. Baseload KV/LS_AANSLUITING.csv",sep=";",dec=",",colClasses=c(EAN="character"))
+EANStoHFD  <- read.csv("N:/Bottum Up Analyse/2. Data/1. Baseload KV/LS_HLD_AANSLUITING.csv",sep=";",dec=",",colClasses=c(EAN="character"))
 #koppelen aan MSR
 EANStoMSR   <- merge(EANStoHFD,mskoppelingen[,c("STATIONBEHUIZING","HOOFDLEIDING")],by="HOOFDLEIDING")
 names(EANStoMSR)[names(EANStoMSR) == 'STATIONBEHUIZING'] <- 'MSR'
@@ -122,3 +122,13 @@ MSR$PC4  <-  substr(MSR$POSTCODE,1,4)         #PC4 aanmaken
 MSRNHN   <-  MSR[which(MSR$PC4 %in% PC4s$Postcode),]
 write.csv(MSRNHN, file="N:/Bottum Up Analyse/2. Data/4. Kabel en MSR-gegevens/MSRgegevens.csv")
 
+#Uitlezen LS-kabelgegevens, koppelen aan capaciteitsinfo
+LSkab    <- read.table("N:/Bottum Up Analyse/2. Data/4. Kabel en MSR-gegevens/LS_kabel_bonoka.txt",sep="|",header=T)
+Kabcap   <- read.table("N:/Bottum Up Analyse/2. Data/4. Kabel en MSR-gegevens/Match kabeltypes NHN.csv",sep=";",header=T)#conversietabel kabelcapaciteiten.
+LSkab    <- merge(LSkab,Kabcap,by.x="UITVOERING",by.y="Kabeltypes.NHN")
+#barplot(table(LSkab$Capaciteit),las=2)
+LSkab$Capaciteit <- as.numeric(LSkab$Capaciteit)
+LSkab    <- data.table(LSkab); setkey(LSkab,HOOFDLEIDING)
+HLDcap   <- LSkab[,max(Capaciteit),by=HOOFDLEIDING]
+setnames(HLDcap,c("HOOFDLEIDING","Capaciteit"))
+write.csv(HLDcap,file="N:/Bottum Up Analyse/2. Data/4. Kabel en MSR-gegevens/HLDcapaciteiten.csv",row.names=F)
