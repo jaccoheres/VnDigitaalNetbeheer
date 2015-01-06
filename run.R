@@ -75,11 +75,11 @@ ParPeaktimeCalculationperOSLD <- function(iter,nparscenarios) {
 }
 
 # Initialise matrices which will hold the peak time and minimum peak time (feedin) per MSR 
-MSRpeaktimetemp      = matrix(nrow = nMSR, ncol = 2*nscenarios)
-MSRpeaktime_MSR      = matrix(nrow = nMSR, ncol = nscenarios)
-MSRpeaktimemin_MSR   = matrix(nrow = nMSR, ncol = nscenarios)
-HLDpeaktime_MSR      = matrix(nrow = nHLD, ncol = nscenarios)
-HLDpeaktimemin_MSR   = matrix(nrow = nHLD, ncol = nscenarios)
+MSRpeaktimetemp      = matrix(nrow = nMSR,  ncol = 2*nscenarios)
+MSRpeaktime_MSR      = matrix(nrow = nMSR,  ncol = nscenarios)
+MSRpeaktimemin_MSR   = matrix(nrow = nMSR,  ncol = nscenarios)
+HLDpeaktime_MSR      = matrix(nrow = nHLD,  ncol = nscenarios)
+HLDpeaktimemin_MSR   = matrix(nrow = nHLD,  ncol = nscenarios)
 OSLDpeaktime_MSR     = matrix(nrow = nOSLD, ncol = nscenarios)
 OSLDpeaktimemin_MSR  = matrix(nrow = nOSLD, ncol = nscenarios)
 
@@ -108,7 +108,7 @@ rm(MSRpeaktimetemp)
 
 # Peak time per OSLD and HLD is calculated by using MSRtoOSLD and MSRtoHLD interconnection matrices
 tic()
-HLDpeaktime_MSR   = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_MSR)
+HLDpeaktime_MSR     = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_MSR)
 HLDpeaktimemin_MSR  = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin_MSR)
 OSLDpeaktime_MSR    = matprod_simple_triplet_matrix(MSRtoOSLD,MSRpeaktime_MSR)
 OSLDpeaktimemin_MSR = matprod_simple_triplet_matrix(MSRtoOSLD,MSRpeaktimemin_MSR)
