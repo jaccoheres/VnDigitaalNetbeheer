@@ -50,6 +50,20 @@ print("--Defining functions (1/3)--")
 # then finds the time at which the load is mimimum and maximum.
 # Note: this function only gives back the time at which this happens. The load itself is calculated
 # later per base, EV, PV and WP
+
+ParPeaktimeCalculationperAsset <- function(iter,nparscenarios,ScenariosperAsset,Allprofiles) {
+   nAssets = dim(ScenariosperAsset)[1]
+   Outputmatrix = matrix(nrow = nAssets,ncol=2*nparscenarios)
+   for(ii in 1:nparscenarios) {
+      for(Assetii in 1:nAssets) {
+         Assettotalprofile = Allprofiles %*% ScenariosperAsset[Assetii,,(ii+(iter*nparscenarios))]
+         Outputmatrix[Assetii,ii]               = which.max(Assettotalprofile)          #peaktime
+         Outputmatrix[Assetii,nparscenarios+ii] = which.min(Assettotalprofile)          #peaktimemin
+      }  
+   }
+   return(Outputmatrix)
+}
+
 ParPeaktimeCalculationperMSR <- function(iter,nparscenarios) {
   Outputmatrix = matrix(nrow = nMSR,ncol=2*nparscenarios)
   for(ii in 1:nparscenarios) {
@@ -77,7 +91,7 @@ ParPeaktimeCalculationperOSLD <- function(iter,nparscenarios) {
 
 print("--Calculation based on peaktime per MSR (2/3)--")
 # Initialise matrices which will hold the peak time and minimum peak time (feedin) per MSR 
-<<<<<<< HEAD
+
 MSRpeaktimetemp      = matrix(nrow = nMSR,  ncol = 2*nscenarios)
 MSRpeaktime_MSR      = matrix(nrow = nMSR,  ncol = nscenarios)
 MSRpeaktimemin_MSR   = matrix(nrow = nMSR,  ncol = nscenarios)
@@ -85,25 +99,19 @@ HLDpeaktime_MSR      = matrix(nrow = nHLD,  ncol = nscenarios)
 HLDpeaktimemin_MSR   = matrix(nrow = nHLD,  ncol = nscenarios)
 OSLDpeaktime_MSR     = matrix(nrow = nOSLD, ncol = nscenarios)
 OSLDpeaktimemin_MSR  = matrix(nrow = nOSLD, ncol = nscenarios)
-=======
-MSRpeaktimetemp      = matrix(nrow = nMSR, ncol = 2*nscenarios)
-MSRpeaktime_MSR      = matrix(nrow = nMSR, ncol = nscenarios)
-MSRpeaktimemin_MSR   = matrix(nrow = nMSR, ncol = nscenarios)
-HLDpeaktime_MSR      = matrix(nrow = nHLD, ncol = nscenarios)
-HLDpeaktimemin_MSR   = matrix(nrow = nHLD, ncol = nscenarios)
->>>>>>> f98df07bbb2d627c2b38d3c6772221a59e376ad0
+
 
 print("--> Calculating peak timeS in network per MSR (2a/3)--")
 # Function is called using full number of CPUs set in DataPreparation.R
 # Rerun DataPreparation to override, manually set "nCPU" in the context of this script
-nparscenarios = nscenarios/nCPUs
+nparscenarios = nscenarios/nCPUs       #NEED FIX: Does not work if nscenarios/nCPUs is not an integer
 cl<-makeCluster(nCPUs) 
 registerDoSNOW(cl)
 tic()
 MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1), 
                           .packages='slam', 
                           .combine=cbind,
-                          .verbose=FALSE) %dopar% {ParPeaktimeCalculationperMSR(iter,nparscenarios)}
+                          .verbose=FALSE) %dopar% {ParPeaktimeCalculationperAsset(iter,nparscenarios,ScenariosperMSR,Allprofiles)}
 
 toc()
 stopCluster(cl)
