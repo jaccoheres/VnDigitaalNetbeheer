@@ -289,10 +289,7 @@ i = indexlist
 j = 1:length(GV$netnr)
 v = matrix(1,length(GV$netnr),1)
 GVtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = length(GV$netnr),dimnames = NULL)
-
-
-rm(ScenariosperHLD)
-GV = as.simple_triplet_matrix(matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
+GVload = as.simple_triplet_matrix(matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
 
 
 # Create MSR TO OS_field connection matrix
@@ -480,59 +477,59 @@ for (EVii in 1:nEVscen) {
 close(progressbar)
 rm(tempScenariosperPC6)
 
-
-#Define function for peak time computation
-GetPeaktimes <- function(index,profiles,scenario) {
-   #GetPeaktimes returns the peak times per MSR in the network
-   #
-   #GetPeaktimes(Scenario,Allprofiles)
-   #
-   #Need far more RAM to program it this way
-   #    for(jj in 1:nprofiles) {
-   #       times     = profiles %*% scenario  #FIX
-   #       peaktimes = max.col(times)
-   #       MSRtime = scenarios[,peaktimes]
-   #    }
-   #    return(MSRtime)
-   
-   #Initialize
-   setTxtProgressBar(progressbar,index)
-   nAssets  = dim(scenario)[1]
-   peaktime = matrix(nrow = nAssets,ncol=2*nscenarios)
-   
-   #Calculate peak times per Asset (If you have more RAM, you can vectorize it quite easily and win a lot of speed)
-   for(Assetii in 1:nAssets) {
-      Assettotalprofile                  = Allprofiles %*% scenario[Assetii,]
-      peaktimemax[Assetii]               = which.max(Assettotalprofile)         #peaktime
-      peaktimemin[Assetii]               = which.min(Assettotalprofile)         #peaktimemin
-      
-      Assetloadmax[Assetii] = Allprofiles[peaktimemax,] * scenario[Assetii,]
-      Assetloadmin[Assetii] = Allprofiles[peaktimemin,] * scenario[Assetii,]
-   }  
-   
-   outputmatrix = matrix(c(peaktimemax,peaktimemin,Assetloadmax,Assetloadmin),nAssets,4)
-   
-#    #Determine peak loads (start of vectorization)
-#    MSRloadmax = Allprofiles[peaktimemax,] * scenario
-#    MSRloadmin = Allprofiles[peaktimemin,] * scenario
-   return(outputmatrix)
-}
-
-##Do parallel computations
-#Initialize
-progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
-cl<-makeCluster(nCPUs) 
-registerDoSNOW(cl)
-tic()
-# #Repeat profiles for fast and easy multiplication (ARRRRRRrrr)
-# Allprofilesrepeat = array(Allprofiles,c(dim(ScenariosperMSR)[1],1,dim(Allprofiles)[1]))
-
-#Calculate peak times
-MSRtimes = foreach(ii = 1:nscenarios,.packages='slam',.combine=cbind,.verbose=FALSE) %dopar% {
-   GetPeaktimes(ii,Allprofiles,ScenariosperMSR[,,ii])}
-#Close
-toc()
-stopCluster(cl)
+# 
+# #Define function for peak time computation
+# GetPeaktimes <- function(index,profiles,scenario) {
+#    #GetPeaktimes returns the peak times per MSR in the network
+#    #
+#    #GetPeaktimes(Scenario,Allprofiles)
+#    #
+#    #Need far more RAM to program it this way
+#    #    for(jj in 1:nprofiles) {
+#    #       times     = profiles %*% scenario  #FIX
+#    #       peaktimes = max.col(times)
+#    #       MSRtime = scenarios[,peaktimes]
+#    #    }
+#    #    return(MSRtime)
+#    
+#    #Initialize
+#    setTxtProgressBar(progressbar,index)
+#    nAssets  = dim(scenario)[1]
+#    peaktime = matrix(nrow = nAssets,ncol=2*nscenarios)
+#    
+#    #Calculate peak times per Asset (If you have more RAM, you can vectorize it quite easily and win a lot of speed)
+#    for(Assetii in 1:nAssets) {
+#       Assettotalprofile                  = Allprofiles %*% scenario[Assetii,]
+#       peaktimemax[Assetii]               = which.max(Assettotalprofile)         #peaktime
+#       peaktimemin[Assetii]               = which.min(Assettotalprofile)         #peaktimemin
+#       
+#       Assetloadmax[Assetii] = Allprofiles[peaktimemax,] * scenario[Assetii,]
+#       Assetloadmin[Assetii] = Allprofiles[peaktimemin,] * scenario[Assetii,]
+#    }  
+#    
+#    outputmatrix = matrix(c(peaktimemax,peaktimemin,Assetloadmax,Assetloadmin),nAssets,4)
+#    
+# #    #Determine peak loads (start of vectorization)
+# #    MSRloadmax = Allprofiles[peaktimemax,] * scenario
+# #    MSRloadmin = Allprofiles[peaktimemin,] * scenario
+#    return(outputmatrix)
+# }
+# 
+# ##Do parallel computations
+# #Initialize
+# progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
+# cl<-makeCluster(nCPUs) 
+# registerDoSNOW(cl)
+# tic()
+# # #Repeat profiles for fast and easy multiplication (ARRRRRRrrr)
+# # Allprofilesrepeat = array(Allprofiles,c(dim(ScenariosperMSR)[1],1,dim(Allprofiles)[1]))
+# 
+# #Calculate peak times
+# MSRtimes = foreach(ii = 1:nscenarios,.packages='slam',.combine=cbind,.verbose=FALSE) %dopar% {
+#    GetPeaktimes(ii,Allprofiles,ScenariosperMSR[,,ii])}
+# #Close
+# toc()
+# stopCluster(cl)
 
 
 ######################################################### Save results
