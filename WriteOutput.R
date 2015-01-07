@@ -45,12 +45,6 @@ Fin_maxload   = c(4,1,3)  #[High EV, low PV, High WP]
 Finscen       = rbind(Fin_maxfeedin,Fin_average,Fin_maxload)
 
 print("--> Casting output to data tables for csv write  (2b/3)--")
-MSRexport        = MSRload_MSR
-MSRexportmin     = MSRloadmin_MSR
-HLDexport        = HLDload_MSR
-HLDexportmin     = HLDloadmin_MSR
-scenarionamelist = c("Low","Med","High","Extr") 
-
 scenariolistMSR  = c()
 scenariocountMSR = c()
 scenariolistHLD  = c()
@@ -59,6 +53,7 @@ scenariolist     = c()
 scenariocount    = c()
 Fin_index        = c()
 
+# First create some vectors which will be used to index data in the finance model
 for (i in 1:nFinscen) {
   name     = paste0("EV",scenarionamelist[Finscen[i,1]],"_PV",scenarionamelist[Finscen[i,2]],"_WP",scenarionamelist[Finscen[i,3]])
   nameMSR = rep(name,nMSR)
@@ -68,15 +63,43 @@ for (i in 1:nFinscen) {
   scenariocountMSR = append(scenariocountMSR,rep(i,nMSR))
   scenariocountHLD = append(scenariocountHLD,rep(i,nHLD))
   index_start      = 1 + nyears * (
-    ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
-      ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
-      ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
+                     ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
+                     ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
+                     ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
   index_end        = index_start + nyears - 1
   Fin_index        = cbind(Fin_index, seq(index_start,index_end))
 }
 
 scenariolist  = c(scenariolistMSR,scenariolistHLD)
 scenariocount = c(scenariocountMSR,scenariocountHLD)
+
+# Then build a function which will cast the input data 
+CastFinanceMatrix <- function(df) {
+  # First define indices
+  ns            = nFinscen * nyears
+  ns2           = 4 * nyears 
+  nAssets       = dim(df)[1]/4
+  Outputmatrix  = matrix(NA,nAssets*nFinscen,nyears*4)         #*4 for base, EV, PV, WP
+  
+  for (i in 1:nFinscen) {
+    Assetindex = (1+(i-1)*nAssets):(i*nAssets)
+    Yearindex  = (1+(i-1)*nyears):(i*nyears)
+    Outputmatrix[Assetindex,1:nyears]                = df[1:nAssets,Yearindex]
+    Outputmatrix[Assetindex,(1+nyears):(2*nyears)]   = df[(1+nAssets):(2*nAssets),Yearindex]
+    Outputmatrix[Assetindex,(1+2*nyears):(3*nyears)] = df[(1+2*nAssets):(3*nAssets),Yearindex]
+    Outputmatrix[Assetindex,(1+3*nyears):(4*nyears)] = df[(1+3*nAssets):(4*nAssets),Yearindex]
+  }
+  return(Outputmatrix)
+}
+
+# Cast data into correct order
+dtMSR    = CastFinanceMatrix(MSRload_MSR[,Fin_index])
+dtMSRmin = CastFinanceMatrix(MSRloadmin_MSR[,Fin_index])
+dtHLD    = CastFinanceMatrix(HLDload_MSR[,Fin_index])
+dtHLDmin = CastFinanceMatrix(HLDloadmin_MSR[,Fin_index])
+data     = rbind(cbind(dtMSRmin,dtMSR),cbind(dtHLDmin,dtHLD))
+
+# Define other vectors required for output
 emptycol      = rep("",length(scenariolist))
 net           = c(rep("MS",length(scenariolistMSR)),rep("LS",length(scenariolistHLD)))
 type          = c(rep("trafo",length(scenariolistMSR)),rep("Kabel",length(scenariolistHLD)))
@@ -84,25 +107,38 @@ assetID       = c(rep(MSRlist,nFinscen),rep(HLD,nFinscen))
 length        = c(rep("",(nFinscen*nMSR)),rep(HLDlength,nFinscen))
 maxCap        = c(rep(MSRmax,nFinscen),rep(HLDmax,nFinscen))
 
-# Select correct scenarios from output and cast to wide format required for finance
-MSRexport     = MSRexport[,Fin_index]
-dfMSRexport   = data.frame("MSR"=rep(MSRlist,4),"belasting"=c(rep("base",nMSR),rep("EV",nMSR),rep("PV",nMSR),rep("WP",nMSR)),MSRexport)
-dfMSRexport   = melt(dfMSRexport, id.vars=1:2)
-dfMSRexport   = dcast(dfMSRexport, MSR ~ belasting + variable)
-dfMSRexport   = dfMSRexport[,2:dim(dfMSRexport)[2]]
-indexlist     = c(seq(1:nyears),seq(1:nyears)*nFinscen,seq(1:nyears)*2*nFinscen,seq(1:nyears)*3*nFinscen)
-
-
+# Cast data into data table
 dt = data.table(emptycol,
                 scenariocount,
                 net,
                 type,
                 assetID,
-                length,
+                as.numeric(length),
                 scenariolist,
                 emptycol,emptycol,emptycol,emptycol,
                 maxCap,
-                emptycol,emptycol,emptycol,emptycol,emptycol,emptycol)
+                emptycol,emptycol,emptycol,emptycol,emptycol,emptycol,
+                data)
+
+
+#set names
+names = c()
+years = startyear:endyear
+for (i in c("-","+")) {
+  for (j in c("Base","EV","PV","WP")) {
+    names = c(names,paste0(j,"_",years,i))
+  }
+}
+names = c("","scenarionummer","net","type","NR_Behuizing","Lengte","scenarioaanduiding",
+           "","","","",
+           "Nominaal vermogen",
+           "","","","","","",
+           names)
+setnames(dt,names)
+
+filename = paste0("Fin-output NHN_",Sys.Date(),".csv")
+print("--> Write csv for Finance (2c/3)--")
+write.csv2(dt,filename,row.names=FALSE)
 
 # Export to VISION ----------------------------------------------------------------------------------------------
 print("--Exporting to VISION (3/3)--")
