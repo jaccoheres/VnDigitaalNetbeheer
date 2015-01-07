@@ -34,11 +34,19 @@ library(data.table)
 library(slam)       #Used for sparse matrices
 library(tictoc)     #Because I am a Matlab person
 library(dplyr)
+library(ff)
+library(utils)
 
 #set path
 path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 
 ################################################################################ Initialise variables and load data 
+print("--Calculate memory-intensive GV telemetry users (0/6)--")
+
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+# load('SAP_TESLA_NHN.Rda')
+# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+
 print("--Initializing basic variables (1a/6)--")
 startyear = 2014
 endyear   = 2030
@@ -63,8 +71,8 @@ HLDspec = read.table("Match kabeltypes NHN.csv"                        , sep = "
 Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv" , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 
 setwd(paste0(path,"/2. Baseload GV"))
-GV        = read.table("GVBaseloadsaanstations.csv"                      , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-GVprofile = read.table("profielenGV.csv"                                 , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+GV            = read.table("GVBaseloadsaanstations.csv"                      , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+GVprofiletext = read.table("profielenGV.csv"                                 , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 
 # Klant & Markt scenario's
 setwd(paste0(path,"/5. K&M input/EV KV"))
@@ -102,8 +110,13 @@ PVprofile    = data.matrix(PV_profile)
 WPprofile    = data.matrix(WP_profile)
 baseprofile  = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
 PC4          = data.matrix(EV_low)[,2]
+
 WPKMPC6      = WP_low$PC6
 PVKMPC6      = PV_low$PC6
+GVprofile    = matrix(baseprofile[,6],length(baseprofile[,6]),20)     #Fill gaps in GVprofile with the EDSN E3A profile (baseprofile[,6])
+GVtemp       = data.matrix(GVprofiletext)[,3:12]                      
+GVtemp       = rbind(GVtemp[-1:-288,],GVtemp[97:288,])                      #Sync the days of the week and account for leap year
+GVprofile[,c(1,2,4,7,8,10,13,14,19,20)] = GVtemp
 
 #clean up workspace
 rm(EV_low, EV_med, EV_high, EV_hydro, PV_low, PV_med, PV_high, WP_low, WP_med, WP_high, EV_profile, PV_profile, WP_profile, EDSN)
@@ -270,12 +283,17 @@ print("--Filling sparse connection matrix for GV to MSR (3c/6)--")
 GVtoMSRlist  = GV$netnr # Retrieve the GVs connected to each MSR
 
 indexlist    = match(GVtoMSRlist,MSRlist)    # Match the MSR IDs
-GVuse        = as.numeric(GV$SJVtot)*4*as.numeric(GV$maxfrac2) #Factor 4 is for the conversion from quarters to hours
-
+# GVuse        = as.numeric(GV$SJVtot)*4*as.numeric(GV$maxfrac2) #Factor 4 is for the conversion from quarters to hours
+GVuse        = (t(GVprofile[,as.numeric(GV$KVKSEGMENT)])*as.numeric(GV$SJVtot)*4)
 i = indexlist
-j = 1:length(GVuse)
-v = matrix(1,length(GVuse),1)
-GVtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = length(GVuse),dimnames = NULL)
+j = 1:length(GV$netnr)
+v = matrix(1,length(GV$netnr),1)
+GVtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = length(GV$netnr),dimnames = NULL)
+
+
+rm(ScenariosperHLD)
+GV = as.simple_triplet_matrix(matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
+
 
 # Create MSR TO OS_field connection matrix
 print("--Filling sparse connection matrix for MSR to OS Field (3d/6)--")
@@ -440,24 +458,6 @@ MSRprofiles = allprofiles
 ##Create scenario list
 # Create matrices which hold the SJV and number of EV, PV and WP per HLD and MSR
 for (EVii in 1:nEVscen) {
-<<<<<<< HEAD
-   for(PVii in 1:nPVscen) {
-      for(WPii in 1:nWPscen) {
-         for(yearii in 1:nyears) {
-            setTxtProgressBar(progressbar,index)
-            # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
-            # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
-            tempScenariosperPC6 = cbind(EDSNperPC6,EVall[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
-            # Apply matrix multiplication to arrive at matrices per HLD and MSR
-            ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
-            ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
-            ScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempScenariosperPC6)
-            index = index + 1
-            # TODO: Add GV
-         }
-      }
-   }
-=======
   for(PVii in 1:nPVscen) {
     for(WPii in 1:nWPscen) {     
       for(yearii in 1:nyears) {
@@ -476,23 +476,46 @@ for (EVii in 1:nEVscen) {
       scenarionumber = rbind(scenarionumber,c((index-1)/nyears,EVii,PVii,WPii))      
     }
   }
->>>>>>> c9a625c4c11c6a8a01a51622fb282061db465a83
 }
 close(progressbar)
 rm(tempScenariosperPC6)
 
 
-#Define function for peak load computation
-GetPeakloads <- function(profiles,scenario) {
-   #GetPeakloads returns the peak loads per MSR in the network
+#Define function for peak time computation
+GetPeaktimes <- function(index,profiles,scenario) {
+   #GetPeaktimes returns the peak times per MSR in the network
    #
-   #GetPeakloads(Scenario,Allprofiles)
+   #GetPeaktimes(Scenario,Allprofiles)
    #
-   #
-   loads     = profiles %*% scenario  #FIX
-   peaktimes = max.col(loads)
-   MSRload = scenarios[,peaktimes]
-   return(MSRload)
+   #Need far more RAM to program it this way
+   #    for(jj in 1:nprofiles) {
+   #       times     = profiles %*% scenario  #FIX
+   #       peaktimes = max.col(times)
+   #       MSRtime = scenarios[,peaktimes]
+   #    }
+   #    return(MSRtime)
+   
+   #Initialize
+   setTxtProgressBar(progressbar,index)
+   nAssets  = dim(scenario)[1]
+   peaktime = matrix(nrow = nAssets,ncol=2*nscenarios)
+   
+   #Calculate peak times per Asset (If you have more RAM, you can vectorize it quite easily and win a lot of speed)
+   for(Assetii in 1:nAssets) {
+      Assettotalprofile                  = Allprofiles %*% scenario[Assetii,]
+      peaktimemax[Assetii]               = which.max(Assettotalprofile)         #peaktime
+      peaktimemin[Assetii]               = which.min(Assettotalprofile)         #peaktimemin
+      
+      Assetloadmax[Assetii] = Allprofiles[peaktimemax,] * scenario[Assetii,]
+      Assetloadmin[Assetii] = Allprofiles[peaktimemin,] * scenario[Assetii,]
+   }  
+   
+   outputmatrix = matrix(c(peaktimemax,peaktimemin,Assetloadmax,Assetloadmin),nAssets,4)
+   
+#    #Determine peak loads (start of vectorization)
+#    MSRloadmax = Allprofiles[peaktimemax,] * scenario
+#    MSRloadmin = Allprofiles[peaktimemin,] * scenario
+   return(outputmatrix)
 }
 
 ##Do parallel computations
@@ -501,13 +524,12 @@ progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=",
 cl<-makeCluster(nCPUs) 
 registerDoSNOW(cl)
 tic()
-#Repeat profiles for fast and easy multiplication (ARRRRRRrrr)
-Allprofilesrepeat = array(Allprofiles,dim(ScenariosperMSR)[1],dim(ScenariosperMSR)[2],dim(Allprofiles)[1])
+# #Repeat profiles for fast and easy multiplication (ARRRRRRrrr)
+# Allprofilesrepeat = array(Allprofiles,c(dim(ScenariosperMSR)[1],1,dim(Allprofiles)[1]))
 
-#Calculate peak loads
-MSRloads = foreach(ii = 1:10,.packages='slam',.combine=cbind,.verbose=FALSE) %dopar% {
-   #Getpeakloads(MSRprofiles,ScenariosperMSR[,,ii])}
-   Getpeakloads(Allprofilesrepeat,ScenariosperMSR[,,ii])}
+#Calculate peak times
+MSRtimes = foreach(ii = 1:nscenarios,.packages='slam',.combine=cbind,.verbose=FALSE) %dopar% {
+   GetPeaktimes(ii,Allprofiles,ScenariosperMSR[,,ii])}
 #Close
 toc()
 stopCluster(cl)
