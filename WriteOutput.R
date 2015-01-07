@@ -34,9 +34,79 @@ library(gmodels)
 print("--Loading data (1/3)--")
 load("CalculationOutput_NH_v2.RData")
 
+# Export to Finance output ----------------------------------------------------------------------------------
+print("--Write export for finance (2/3)--")
+setwd(paste0(path,"/7. Output/2. Finance"))
+print("--> Defining scenarios for finance output (2a/3)--")
+nFinscen      = 3
+Fin_maxfeedin = c(1,3,1)  #[Low EV, high PV, low WP]
+Fin_average   = c(2,2,2)  #[medium EV, medium PV, medium WP]
+Fin_maxload   = c(4,1,3)  #[High EV, low PV, High WP]
+Finscen       = rbind(Fin_maxfeedin,Fin_average,Fin_maxload)
+
+print("--> Casting output to data tables for csv write  (2b/3)--")
+MSRexport        = MSRload_MSR
+MSRexportmin     = MSRloadmin_MSR
+HLDexport        = HLDload_MSR
+HLDexportmin     = HLDloadmin_MSR
+scenarionamelist = c("Low","Med","High","Extr") 
+
+scenariolistMSR  = c()
+scenariocountMSR = c()
+scenariolistHLD  = c()
+scenariocountHLD = c()
+scenariolist     = c()
+scenariocount    = c()
+Fin_index        = c()
+
+for (i in 1:nFinscen) {
+  name     = paste0("EV",scenarionamelist[Finscen[i,1]],"_PV",scenarionamelist[Finscen[i,2]],"_WP",scenarionamelist[Finscen[i,3]])
+  nameMSR = rep(name,nMSR)
+  nameHLD = rep(name,nHLD)
+  scenariolistMSR = append(scenariolistMSR,nameMSR)
+  scenariolistHLD = append(scenariolistHLD,nameHLD)
+  scenariocountMSR = append(scenariocountMSR,rep(i,nMSR))
+  scenariocountHLD = append(scenariocountHLD,rep(i,nHLD))
+  index_start      = 1 + nyears * (
+    ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
+      ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
+      ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
+  index_end        = index_start + nyears - 1
+  Fin_index        = cbind(Fin_index, seq(index_start,index_end))
+}
+
+scenariolist  = c(scenariolistMSR,scenariolistHLD)
+scenariocount = c(scenariocountMSR,scenariocountHLD)
+emptycol      = rep("",length(scenariolist))
+net           = c(rep("MS",length(scenariolistMSR)),rep("LS",length(scenariolistHLD)))
+type          = c(rep("trafo",length(scenariolistMSR)),rep("Kabel",length(scenariolistHLD)))
+assetID       = c(rep(MSRlist,nFinscen),rep(HLD,nFinscen))
+length        = c(rep("",(nFinscen*nMSR)),rep(HLDlength,nFinscen))
+maxCap        = c(rep(MSRmax,nFinscen),rep(HLDmax,nFinscen))
+
+# Select correct scenarios from output and cast to wide format required for finance
+MSRexport     = MSRexport[,Fin_index]
+dfMSRexport   = data.frame("MSR"=rep(MSRlist,4),"belasting"=c(rep("base",nMSR),rep("EV",nMSR),rep("PV",nMSR),rep("WP",nMSR)),MSRexport)
+dfMSRexport   = melt(dfMSRexport, id.vars=1:2)
+dfMSRexport   = dcast(dfMSRexport, MSR ~ belasting + variable)
+dfMSRexport   = dfMSRexport[,2:dim(dfMSRexport)[2]]
+indexlist     = c(seq(1:nyears),seq(1:nyears)*nFinscen,seq(1:nyears)*2*nFinscen,seq(1:nyears)*3*nFinscen)
+
+
+dt = data.table(emptycol,
+                scenariocount,
+                net,
+                type,
+                assetID,
+                length,
+                scenariolist,
+                emptycol,emptycol,emptycol,emptycol,
+                maxCap,
+                emptycol,emptycol,emptycol,emptycol,emptycol,emptycol)
+
 # Export to VISION ----------------------------------------------------------------------------------------------
-print("--Exporting to VISION (2/3)--")
-print("--> Setting variables for VISION output (2a/3)--")
+print("--Exporting to VISION (3/3)--")
+print("--> Setting variables for VISION output (3a/3)--")
 # Vision requires a very specific output format
 indexlist         = match(MSRlist,Vnames$NR_Behuizing_NRG)                 # Cannot match 362 stations
 Visionlist        = Vnames$ID_Vision[indexlist]                            # Sort the list of MSR's in the Vision order
@@ -54,7 +124,7 @@ timelist          = rep.int(9,nscenarios)
 exportbaseload    = matrix(t(MSRexport)[indexlist],nscenarios,(nMSRexport*4))     # Reshape results for saving in Vision format
 exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSRexport*4))  # Reshape results for saving in Vision format
 
-print("--> Casting output to data tables for csv write (2b/3)--")
+print("--> Casting output to data tables for csv write (3b/3)--")
 #Set VISION output files and column names
 exportname = c('Datum','Tijd',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep='')) #Setup the specific Vision names
 dt = data.table(datelist,timelist,exportbaseload)           #Convert exportmatrix to datatable because R is not capable enough to save matrices
@@ -65,7 +135,7 @@ dt2 = data.table(scenarionumber)
 setnames(dt2,c('Scenario index','EV scenario', 'PV scenario', 'WP scenario'))
 scenarioindex = scenarionumber[,1]
 
-print("--> Write csv's for VISION (2c/3)--")
+print("--> Write csv's for VISION (3c/3)--")
 setwd(paste0(path,"/7. Output/1. VISION"))
 # write CSVs for VISION
 progressbar = txtProgressBar(min = 0, max = length(scenarioindex), initial = 0, char = "=", style = 3)
@@ -93,73 +163,6 @@ close(progressbar)
 
 # Write identifiers for scenarios
 write.csv2(dt2, "Scenarioindex.csv",)
-
-# Export to Finance output ----------------------------------------------------------------------------------
-print("--Write export for finance (3/3)--")
-setwd(paste0(path,"/7. Output/2. Finance"))
-print("--> Defining scenarios for finance output (3a/3)--")
-nFinscen      = 3
-Fin_maxfeedin = c(1,3,1)  #[Low EV, high PV, low WP]
-Fin_average   = c(2,2,2)  #[medium EV, medium PV, medium WP]
-Fin_maxload   = c(4,1,3)  #[High EV, low PV, High WP]
-Finscen       = rbind(Fin_maxfeedin,Fin_average,Fin_maxload)
-
-print("--> Casting output to data tables for csv write  (3b/3)--")
-MSRexport        = MSRload_MSR
-MSRexportmin     = MSRloadmin_MSR
-HLDexport        = HLDload_MSR
-HLDexportmin     = HLDloadmin_MSR
-scenarionamelist = c("Low","Med","High","Extr") 
-
-scenariolistMSR  = c()
-scenariocountMSR = c()
-scenariolistHLD  = c()
-scenariocountHLD = c()
-scenariolist     = c()
-scenariocount    = c()
-Fin_index        = c()
-
-for (i in 1:nFinscen) {
-   name     = paste0("EV",scenarionamelist[Finscen[i,1]],"_PV",scenarionamelist[Finscen[i,2]],"_WP",scenarionamelist[Finscen[i,3]])
-   nameMSR = rep(name,nMSR)
-   nameHLD = rep(name,nHLD)
-   scenariolistMSR = append(scenariolistMSR,nameMSR)
-   scenariolistHLD = append(scenariolistHLD,nameHLD)
-   scenariocountMSR = append(scenariocountMSR,rep(i,nMSR))
-   scenariocountHLD = append(scenariocountHLD,rep(i,nHLD))
-   index_start      = 1 + nyears * (
-                      ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
-                      ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
-                      ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
-   index_end        = index_start + nyears - 1
-   Fin_index        = cbind(Fin_index, seq(index_start,index_end))
-}
-
-scenariolist  = c(scenariolistMSR,scenariolistHLD)
-scenariocount = c(scenariocountMSR,scenariocountHLD)
-emptycol      = rep("",length(scenariolist))
-net           = c(rep("MS",length(scenariolistMSR)),rep("LS",length(scenariolistHLD)))
-type          = c(rep("trafo",length(scenariolistMSR)),rep("Kabel",length(scenariolistHLD)))
-assetID       = c(rep(MSRlist,nFinscen),rep(HLD,nFinscen))
-length        = c(rep("",(nFinscen*nMSR)),rep(HLDlength,nFinscen))
-maxCap        = c(rep(MSRmax,nFinscen),rep(HLDmax,nFinscen))
-
-# Select correct scenarios from output and cast to wide format required for finance
-MSRexport     = MSRexport[,Fin_index]
-dfMSRexport   = data.frame("MSR"=rep(MSRlist,4),"belasting"=c(rep("base",nMSR),rep("EV",nMSR),rep("PV",nMSR),rep("WP",nMSR)),MSRexport)
-dfMSRexport   = dcast(dfMSRexport, MSR~belasting) #fix
-
-dt = data.table(emptycol,
-                scenariocount,
-                net,
-                type,
-                assetID,
-                length,
-                scenariolist,
-                emptycol,emptycol,emptycol,emptycol,
-                maxCap,
-                emptycol,emptycol,emptycol,emptycol,emptycol,emptycol)
-
 
 
 # # Export to Excel for analysis ----------------------------------------------------------------------------------
