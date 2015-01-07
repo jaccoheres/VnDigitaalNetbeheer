@@ -116,6 +116,8 @@ MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1),
 toc()
 stopCluster(cl)
 
+test = foreacht(iter,.combine=cbind,.verbose=FALSE)
+
 # Because peaktimes are processed parallelly, we need to re-order the columns.
 # Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
 # Results are re-ordered below and stored in two separate matrices

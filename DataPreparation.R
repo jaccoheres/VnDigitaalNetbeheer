@@ -419,29 +419,68 @@ ScenariosperHLD      = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dime
 ScenariosperMSR      = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 ScenariosperOSLD     = array(NA, c(nOSLD,nprofiles,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 
-index = 1
-progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
+
+
+
+################# WORK IN PROGRESS
+
+#Calculate profiles per MSR
+MSRprofiles = allprofiles   
+   
+##Create scenario list
 # Create matrices which hold the SJV and number of EV, PV and WP per HLD and MSR
 for (EVii in 1:nEVscen) {
-  for(PVii in 1:nPVscen) {
-    for(WPii in 1:nWPscen) {
-      for(yearii in 1:nyears) {
-        setTxtProgressBar(progressbar,index)
-        # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
-        # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
-        tempScenariosperPC6 = cbind(EDSNperPC6,EVall[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
-        # Apply matrix multiplication to arrive at matrices per HLD and MSR
-        ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
-        ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
-        ScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempScenariosperPC6)
-        index = index + 1
-        # TODO: Add GV
+   for(PVii in 1:nPVscen) {
+      for(WPii in 1:nWPscen) {
+         for(yearii in 1:nyears) {
+            setTxtProgressBar(progressbar,index)
+            # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
+            # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
+            tempScenariosperPC6 = cbind(EDSNperPC6,EVall[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
+            # Apply matrix multiplication to arrive at matrices per HLD and MSR
+            ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
+            ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
+            ScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempScenariosperPC6)
+            index = index + 1
+            # TODO: Add GV
+         }
       }
-    }
-  }
+   }
 }
 close(progressbar)
 rm(tempScenariosperPC6)
+
+
+#Define function for peak load computation
+GetPeakloads <- function(profiles,scenario) {
+   #GetPeakloads returns the peak loads per MSR in the network
+   #
+   #GetPeakloads(Scenario,Allprofiles)
+   #
+   #
+   loads     = profiles %*% scenario  #FIX
+   peaktimes = max.col(loads)
+   MSRload = scenarios[,peaktimes]
+   return(MSRload)
+}
+
+##Do parallel computations
+#Initialize
+progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
+cl<-makeCluster(nCPUs) 
+registerDoSNOW(cl)
+tic()
+#Repeat profiles for fast and easy multiplication (ARRRRRRrrr)
+Allprofilesrepeat = array(Allprofiles,dim(ScenariosperMSR)[1],dim(ScenariosperMSR)[2],dim(Allprofiles)[1])
+
+#Calculate peak loads
+MSRloads = foreach(ii = 1:10,.packages='slam',.combine=cbind,.verbose=FALSE) %dopar% {
+   #Getpeakloads(MSRprofiles,ScenariosperMSR[,,ii])}
+   Getpeakloads(Allprofilesrepeat,ScenariosperMSR[,,ii])}
+#Close
+toc()
+stopCluster(cl)
+
 
 ######################################################### Save results
 print("--Saving results (6/6)--")
