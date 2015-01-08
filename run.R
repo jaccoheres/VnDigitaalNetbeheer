@@ -166,12 +166,12 @@ for(ii in 1:nscenarios) {
    
    #peak load per MSR  
    tempMSR = Allprofiles[MSRpeaktime_MSR[,ii],] * ScenariosperMSR[,,ii]
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex] + GVMSRload[,MSRpeaktime_MSR]),tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
+   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktime_MSR[,ii]),nMSR,)],tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
    MSRload_MSR[,ii] = c(tempMSR)
    
    #minimum peak load per MSR (=maximum feedin)
    tempMSR = Allprofiles[MSRpeaktimemin_MSR[,ii],] * ScenariosperMSR[,,ii]
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex] + GVMSRload[,MSRpeaktimemin_MSR]),tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
+   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktimemin_MSR[,ii]),nMSR,)],tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
    MSRloadmin_MSR[,ii] = c(tempMSR)
    
    #peak load per HLD 
@@ -265,24 +265,24 @@ for(ii in 1:nscenarios) {
    
    #peak load per OSLD  
    tempOSLD = Allprofiles[OSLDpeaktime_OSLD[,ii],] * ScenariosperOSLD[,,ii]
-   tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]) + GVOSLDload[,OSLDpeaktime_OSLD],tempOSLD[,EVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
+   tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]) + GVOSLDload[matrix(c(1:nOSLD,OSLDpeaktime_OSLD[,ii]),nOSLD,)],tempOSLD[,EVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
    OSLDload_OSLD[,ii] = c(tempOSLD)
    
    #minimum peak load per OSLD (=maximum feedin)
    tempOSLD = Allprofiles[OSLDpeaktimemin_OSLD[,ii],] * ScenariosperOSLD[,,ii]
-   tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]) + GVOSLDload[,OSLDpeaktimemin_OSLD],tempOSLD[,EVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
+   tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]) + GVOSLDload[matrix(c(1:nOSLD,OSLDpeaktimemin_OSLD[,ii]),nOSLD,)],tempOSLD[,EVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
    OSLDloadmin_OSLD[,ii] = c(tempOSLD)
    
    #peak load per MSR  
    tempMSR = Allprofiles[MSRpeaktime_OSLD[,ii],] * ScenariosperMSR[,,ii] #doesn't work because MSRpeaktime_OSLD is not full rank because some MSRs cannot be connected to OS
    tempMSR[is.na(tempMSR)] = 0
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[,OSLDpeaktime_OSLD],tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
+   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktime_OSLD[,ii]),nMSR,)],tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
    MSRload_OSLD[,ii] = c(tempMSR)
    
    #minimum peak load per MSR (=maximum feedin)
    tempMSR = Allprofiles[MSRpeaktimemin_OSLD[,ii],] * ScenariosperMSR[,,ii]
    tempMSR[is.na(tempMSR)] = 0
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex])+ GVMSRload[,OSLDpeaktimemin_OSLD],tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
+   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktime_OSLD[,ii]),nMSR,)],tempMSR[,EVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
    MSRloadmin_OSLD[,ii] = c(tempMSR)
    
    #peak load per HLD 

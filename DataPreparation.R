@@ -1,5 +1,5 @@
 # DataPreparation.R
-# This script modifies the AM and K&M data and prepares it for further processing
+# This script loads & modifies the AM and K&M data and prepares it for further processing
 # If the network data stays the same, the script only has to be executed once.
 # The script is therefore NOT optimized for speed (i.e. get coffee AFTER you press Source)
 #
@@ -7,7 +7,7 @@
 # Start 28-10-2014
 # 
 # How this script works:
-# 1. Initialize basic variables and load all data from Rdata file
+# 1. Initialize basic variables and load all data from data files
 # 2. Perform various clean up operations
 # 3. Create a connection matrix in the form: 'LSLD_load = connection_matrix * PC6_load' 
 #    so the calculations become rediciously fast
@@ -40,6 +40,24 @@ library(utils)
 #set path
 path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 
+################################################################################ Initialise variables and load data 
+print("--Calculate memory-intensive GV telemetry users (0/6)--")
+
+# telemetrylist = list.files(paste0(path,"/2. Baseload GV/2. SAP TESLA"), pattern = '.csv')
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+# for(ii in 1:2){#length(telemetrylist)){
+#    GVtel  = read.table(telemetrylist[ii] , sep = ",", dec=":" ,colClasses = "character", header = TRUE)   
+# }
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+# load('SAP_TESLA_NHN.Rda')
+# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+
+setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+
+
+# load('SAP_TESLA_NHN.Rda')
+# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+
 print("--Initializing basic variables (1a/6)--")
 startyear = 2014
 endyear   = 2030
@@ -48,11 +66,48 @@ nPVscen   = 3
 nWPscen   = 3
 nCPUs     = 4
 
-print("--Loading data variables (1b/6)--")
-# Load data (To generate this data: run LoadData_ext.R, where ext = identifier of region you want to study)
-# for example run LoadData_NHN.R
-setwd(paste0(path,"/7. Output"))
-load("Data_NH_v2.RData")
+print("--Loading data (1b/6)--")
+# Asset management network data
+setwd(paste0(path,"/1. Baseload KV"))
+Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)#, sep = ";", dec="," ,colClasses = "character", stringsAsFactors=FALSE, header = TRUE)
+MSR    = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+EDSN   = read.table("EDSN.csv"                                    , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+# KVonb   = read.table("KVonbekendeHLD.csv"                       , sep = "|", dec="," ,colClasses = "character", header = TRUE)
+MSRonb  = read.table("KVonbekendeMSR.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+
+setwd(paste0(path,"/4. Kabel en MSR-gegevens"))
+HLDcap  = read.table("LS_kabel_bonoka.txt"                             , sep = "|", dec="." , header = TRUE)
+MSRcap  = read.table("MSRgegevens_bonoka.csv"                          , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+HLDspec = read.table("Match kabeltypes NHN.csv"                        , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv" , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+
+setwd(paste0(path,"/2. Baseload GV"))
+GV            = read.table("GVBaseloadsaanstations.csv"                      , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+GVprofiletext = read.table("profielenGV.csv"                                 , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+
+# Klant & Markt scenario's
+setwd(paste0(path,"/5. K&M input/EV KV"))
+EV_low      = read.table("20141111_NHN_Scen1.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+EV_med      = read.table("20141111_NHN_Scen2.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+EV_high     = read.table("20141111_NHN_Scen3.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+EV_hydro    = read.table("20141111_NHN_Scen4.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE) # This is a hydrogen vehicle scenario
+EV_profile  = read.table("EV thuislaadprofiel.csv" , sep = ";", dec=",", header = TRUE)
+
+setwd(paste0(path,"/5. K&M input/PV KV"))
+PV_low     = read.table("castoutNHLow.csv"        , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+PV_med     = read.table("castoutNHMed.csv"        , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+PV_high    = read.table("castoutNHHigh.csv"       , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+PV_profile = read.table("PV_profile_dec2014.csv"  , sep = ";", dec="," , header = FALSE)
+
+setwd(paste0(path,"/5. K&M input/WP KV"))
+WP_low     = read.table("wp laag-2030.csv"    , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+WP_med     = read.table("wp midden-2030.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+WP_high    = read.table("wp hoog-2030.csv"    , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+#WP_low     = read.table("Warmtepompen NHN 13-11-2014 min.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+#WP_med     = read.table("Warmtepompen NHN 13-11-2014 med.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+#WP_high    = read.table("Warmtepompen NHN 13-11-2014 max.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+#WP_extr    = read.table("Warmtepompen NHN 13-11-2014 xtr.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+WP_profile = read.table("WP profiel_2Dec_JvdE.csv"                       , sep = ";", dec="," , header = FALSE)
 
 ################################################################################## Clean up data
 print("--Cleaning up data (2/6)--")
