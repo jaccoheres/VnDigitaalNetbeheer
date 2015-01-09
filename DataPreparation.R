@@ -1,5 +1,5 @@
 # DataPreparation.R
-# This script modifies the AM and K&M data and prepares it for further processing
+# This script loads & modifies the AM and K&M data and prepares it for further processing
 # If the network data stays the same, the script only has to be executed once.
 # The script is therefore NOT optimized for speed (i.e. get coffee AFTER you press Source)
 #
@@ -7,7 +7,7 @@
 # Start 28-10-2014
 # 
 # How this script works:
-# 1. Initialize basic variables and load all data from Rdata file
+# 1. Initialize basic variables and load all data from data files
 # 2. Perform various clean up operations
 # 3. Create a connection matrix in the form: 'LSLD_load = connection_matrix * PC6_load' 
 #    so the calculations become rediciously fast
@@ -40,6 +40,24 @@ library(utils)
 #set path
 path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 
+################################################################################ Initialise variables and load data 
+print("--Calculate memory-intensive GV telemetry users (0/6)--")
+
+# telemetrylist = list.files(paste0(path,"/2. Baseload GV/2. SAP TESLA"), pattern = '.csv')
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+# for(ii in 1:2){#length(telemetrylist)){
+#    GVtel  = read.table(telemetrylist[ii] , sep = ",", dec=":" ,colClasses = "character", header = TRUE)   
+# }
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+# load('SAP_TESLA_NHN.Rda')
+# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+# 
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+
+
+# load('SAP_TESLA_NHN.Rda')
+# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+
 print("--Initializing basic variables (1a/6)--")
 startyear = 2014
 endyear   = 2030
@@ -48,10 +66,7 @@ nPVscen   = 3
 nWPscen   = 3
 nCPUs     = 4
 
-print("--Loading data variables (1b/6)--")
-# Load data (To generate this data: run LoadData_ext.R, where ext = identifier of region you want to study)
-# for example run LoadData_NHN.R
-setwd(paste0(path,"/7. Output"))
+print("--Loading data (1b/6)--")
 load("Data_NH_v2.RData")
 
 ################################################################################## Clean up data
@@ -90,12 +105,7 @@ rm(EV_low, EV_med, EV_high, EV_hydro, PV_low, PV_med, PV_high, WP_low, WP_med, W
 Users$ARI_ADRES = substr(Users$ARI_ADRES, 1, 6)
 
 print("--Cleaning up and indexing yearprofiles (2b/6)--")
-# Convert K&M EV, WP and PV profiles to a year-profile with a 15 minute interval, and combine all profiles into "AllKVprofiles" vector
-#EVKVprofile = as.matrix(data.frame(rep(EVKVprofile[seq(1,1439,by=15),1],365),
-#                   rep(EVKVprofile[seq(1,1439,by=15),2],365),
-#                   rep(EVKVprofile[seq(1,1439,by=15),3],365))) #Repeat profile to obtain a year-profile
-#EVGVprofile = as.matrix(data.frame(rep(EVGVprofile[seq(1,1439,by=15),1],365),
-#                   rep(EVGVprofile[seq(1,1439,by=15),2],365))) #Repeat profile to obtain a year-profile                   
+# Convert K&M EV, WP and PV profiles to a year-profile with a 15 minute interval, and combine all profiles into "AllKVprofiles" vector                
 AllKVprofiles = as.matrix(data.table(baseprofile,EVKVprofile,PVprofile,WPprofile))
 #AllGVprofile  = as.matrix(data.table(EVGVprofile))
 
@@ -451,6 +461,8 @@ close(progressbar)
 
 
 
+#Generate GV load scenarios
+print("--Generate GV scenario list (5c/6) (be patient)--")
 KVKnumber = as.numeric(GV$KVKSEGMENT)
 KVKnumber[is.na(KVKnumber)] = 3
 GV_SJV = as.numeric(GV$SJVtot)
@@ -460,6 +472,18 @@ GVMSRload = (matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
 GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 
 
+######################################################### Save results
+print("--Saving results (6/6)--")
+setwd(paste0(path,"/7. Output"))
+
+# Save necessary data
+save.image("Connections_NH_v2.RData")
+print("--Done!--")
+
+
+
+
+# For reference, a parrallel processing script per scenario
 # 
 # 
 # #Define function for peak time computation
@@ -514,12 +538,3 @@ GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 # #Close
 # toc()
 # stopCluster(cl)
-
-
-######################################################### Save results
-print("--Saving results (6/6)--")
-setwd(paste0(path,"/7. Output"))
-
-# Save necessary data
-save.image("Connections_NH_v2.RData")
-print("--Done!--")
