@@ -58,49 +58,62 @@ load("Data_NH_v2.RData")
 print("--Cleaning up data (2/6)--")
 # Convert most variables to matrices for easy calculation
 print("--Converting variables to matrices (2a/6)--")
-EVallPC4mat  = cbind(data.matrix(EV_low)[,3:19],data.matrix(EV_hydro)[,3:19],data.matrix(EV_med)[,3:19],data.matrix(EV_high)[,3:19])
-PVallmat     = cbind(data.matrix(PV_low)[,6:22],data.matrix(PV_med)[,6:22],data.matrix(PV_high)[,6:22])
-WPallmat     = cbind(data.matrix(WP_low)[,2:18],data.matrix(WP_med)[,2:18],data.matrix(WP_high)[,2:18])
-EVprofile    = data.matrix(EV_profile)[,2]
-PVprofile    = data.matrix(PV_profile)
-WPprofile    = data.matrix(WP_profile)
-baseprofile  = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
-PC4          = data.matrix(EV_low)[,2]
+EVpartKVPC4mat= cbind(data.matrix(EVpartKV_low)[,3:19],data.matrix(EVpartKV_hydro)[,3:19],data.matrix(EVpartKV_med)[,3:19],data.matrix(EVpartKV_high)[,3:19])
+EVzakKVEANmat = cbind(data.matrix(EVzakKV_low)[,2:18],data.matrix(EVzakKV_hydro)[,2:18],data.matrix(EVzakKV_med)[,2:18],data.matrix(EVzakKV_high)[,2:18])
+EVzakGVEANmat = cbind(data.matrix(EVzakGV_low)[,2:18],data.matrix(EVzakGV_hydro)[,2:18],data.matrix(EVzakGV_med)[,2:18],data.matrix(EVzakGV_high)[,2:18])
+EVparkPC6mat  = cbind(data.matrix(EVpark_low)[,2:18],data.matrix(EVpark_hydro)[,2:18],data.matrix(EVpark_med)[,2:18],data.matrix(EVpark_high)[,2:18])
+EVtankEANmat  = cbind(data.matrix(EVtank_low)[,2:18],data.matrix(EVtank_hydro)[,2:18],data.matrix(EVtank_med)[,2:18],data.matrix(EVtank_high)[,2:18])
+PVallmat      = cbind(data.matrix(PV_low)[,6:22],data.matrix(PV_med)[,6:22],data.matrix(PV_high)[,6:22])
+WPallmat      = cbind(data.matrix(WP_low)[,2:18],data.matrix(WP_med)[,2:18],data.matrix(WP_high)[,2:18])
 
-WPKMPC6      = WP_low$PC6
-PVKMPC6      = PV_low$PC6
-GVprofile    = matrix(baseprofile[,6],length(baseprofile[,6]),20)     #Fill gaps in GVprofile with the EDSN E3A profile (baseprofile[,6])
-GVtemp       = data.matrix(GVprofiletext)[,3:12]                      
-GVtemp       = rbind(GVtemp[-1:-288,],GVtemp[97:288,])                      #Sync the days of the week and account for leap year
+baseprofile   = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
+#EVKVprofile   = #data.matrix(cbind(EVpartKV_profile[,2],EVzak_profile[,2],EVpark_profile[,2]))
+EVKVprofile   = data.matrix(EVpartKV_profile[,2])
+EVGVprofile   = data.matrix(cbind(EVzak_profile[,2],EVtank_profile[,2]))
+# EVprofile     = data.matrix(cbind(EVpartKV_profile[,2],EVzak_profile[,2],EVpark_profile[,2],EVtank_profile[,2]))
+PVprofile     = data.matrix(PV_profile)
+WPprofile     = data.matrix(WP_profile)
+
+PC4           = data.matrix(EVpartKV_low)[,2]
+WPKMPC6       = WP_low$PC6
+PVKMPC6       = PV_low$PC6
+
+GVprofile     = matrix(baseprofile[,6],length(baseprofile[,6]),20)     #Fill gaps in GVprofile with the EDSN E3A profile (baseprofile[,6])
+GVtemp        = data.matrix(GVprofiletext)[,3:12]                      
+GVtemp        = rbind(GVtemp[-1:-288,],GVtemp[97:288,])                      #Sync the days of the week and account for leap year
 GVprofile[,c(1,2,4,7,8,10,13,14,19,20)] = GVtemp
 
 #clean up workspace
-rm(EV_low, EV_med, EV_high, EV_hydro, PV_low, PV_med, PV_high, WP_low, WP_med, WP_high, EV_profile, PV_profile, WP_profile, EDSN)
+rm(EV_low, EV_med, EV_high, EV_hydro, PV_low, PV_med, PV_high, WP_low, WP_med, WP_high, EVpartKV_profile, EVzak_profile, EVpark_profile, EVtank_profile, PV_profile, WP_profile, EDSN)
 
 # Data cleanup: shorten ARI to PC6
 Users$ARI_ADRES = substr(Users$ARI_ADRES, 1, 6)
 
 print("--Cleaning up and indexing yearprofiles (2b/6)--")
-# Convert K&M EV, WP and PV profiles to a year-profile with a 15 minute interval, and combine all profiles into "Allprofiles" vector
-# PVprofile = PVprofile[-seq(2,52704,by=3)]        #Quick and dirty conversion from 10 minute interval to 15 minute interval: Remove every 2nd and 5th entry
-# WPprofile = WPprofile[-seq(2,52704,by=3)]        #Quick and dirty conversion from 10 minute interval to 15 minute interval: Remove every 2nd and 5th entry
-# PVprofile = PVprofile[-1:-96]                    #Throw away a day (K&M uses a leap year) (Should be 29th of februari, FIX this next year :)
-# WPprofile = WPprofile[-1:-96]                    #Throw away a day (K&M uses a leap year)
-EVprofile = rep(EVprofile[seq(1,1439,by=15)],365)#Repeat profile to obtain a year-profile
-Allprofiles = as.matrix(data.table(baseprofile,EVprofile,PVprofile,WPprofile))
+# Convert K&M EV, WP and PV profiles to a year-profile with a 15 minute interval, and combine all profiles into "AllKVprofiles" vector
+#EVKVprofile = as.matrix(data.frame(rep(EVKVprofile[seq(1,1439,by=15),1],365),
+#                   rep(EVKVprofile[seq(1,1439,by=15),2],365),
+#                   rep(EVKVprofile[seq(1,1439,by=15),3],365))) #Repeat profile to obtain a year-profile
+#EVGVprofile = as.matrix(data.frame(rep(EVGVprofile[seq(1,1439,by=15),1],365),
+#                   rep(EVGVprofile[seq(1,1439,by=15),2],365))) #Repeat profile to obtain a year-profile                   
+AllKVprofiles = as.matrix(data.table(baseprofile,EVKVprofile,PVprofile,WPprofile))
+#AllGVprofile  = as.matrix(data.table(EVGVprofile))
 
 # Calculate number of profiles per technology 
-nprofiles = dim(Allprofiles)[2]
+nprofiles = dim(AllKVprofiles)[2]
 nbaseprofile = max(dim(baseprofile)[2],1)
-nEVprofile = max(dim(EVprofile)[2],1)
+nEVKVprofile = max(dim(EVKVprofile)[2],1)
+nEVGVprofile = max(dim(EVGVprofile)[2],1)
 nPVprofile = max(dim(PVprofile)[2],1)
 nWPprofile = max(dim(WPprofile)[2],1)
 
-# Create indices which can be used to address a technology in "Allprofiles" (e.g. EV profiles = Allprofiles[,EVprofileindex])
+# Create indices which can be used to address a technology in "AllKVprofiles" (e.g. EV profiles = AllKVprofiles[,EVprofileindex])
 baseprofileindex = 1:nbaseprofile
-EVprofileindex = (nbaseprofile+1):(nbaseprofile+nEVprofile)
-PVprofileindex = (nbaseprofile+nEVprofile+1):(nbaseprofile+nEVprofile+nPVprofile)
-WPprofileindex = (nbaseprofile+nEVprofile+nWPprofile+1):(nbaseprofile+nEVprofile+nPVprofile+nWPprofile)
+EVKVprofileindex = (nbaseprofile+1):(nbaseprofile+nEVKVprofile)
+PVprofileindex = (nbaseprofile+nEVKVprofile+1):(nbaseprofile+nEVKVprofile+nPVprofile)
+WPprofileindex = (nbaseprofile+nEVKVprofile+nWPprofile+1):(nbaseprofile+nEVKVprofile+nPVprofile+nWPprofile)
+
+EVGVprofileindex = 1:nEVGVprofile
 
 print("--Create lists of unique PC6, LSLD, HLD and MSR elements (2c/6)--")
 # Create list with unique PC6 codes
@@ -338,7 +351,8 @@ MSRmax    = as.numeric(MSRmax)
 MSRmax[is.na(MSRmax)] = 0 #Fix the MSR's for which the capacity is unknown
 
 ######################################################### Convert EV PC4 scenario to PC6
-print("--Extrapolating PC4 EV data to PC6 (4/6)--")
+print("--Ordering EV KV data (4/6)--")
+print("--Extrapolating PC4 EV data to PC6 (4a/6")
 # Data is extrapolated using a weighted average. The actual number of EV's per household is calculated
 # by dividing the total number of EV's per PC4 by the total number of households in that PC4. The number
 # is then multiplied with the number of households on each PC6 and rounded. EV_PC6 = hh_PC6*(total_EV/hh_PC4)
@@ -348,7 +362,7 @@ KMPC4 = PC4                                         #Generate KM PC4 list
 AMPC4 = sort(unique(substr(Users$ARI_ADRES, 1, 4))) #Generate AM PC4 list
 AMPC6 = Users$ARI_ADRES
 indeces = match(AMPC4,KMPC4)                  #Find the location of AM PC4 in the KM list
-AMEVPC4 = EVallPC4mat[indeces,]               #Transform the EV scenario list to AM PC4
+AMEVPC4 = EVpartKVPC4mat[indeces,]            #Transform the EV scenario list to AM PC4
 
 # Calculate number of households per PC for the weighted average
 hhPC6 = table(Users$ARI_ADRES)                #Calculate number of households per PC6
@@ -362,9 +376,9 @@ EV_per_hh_PC4 = AMEVPC4/hhPC4matrix                      #Calculate the EV/hh on
 # Create final matrix
 indexlist   = match((substr(PC6, 1, 4)),AMPC4)             #find indeces for transformation PC4 => PC6
 hhPC6matrix = matrix(rep(hhPC6, times = dim(AMEVPC4)[2]), nrow = length(hhPC6) ,ncol = dim(AMEVPC4)[2])
-EVall       = EV_per_hh_PC4[indexlist,] * hhPC6matrix      #Generate EV per hh on PC6 level. 
+EVpartKV    = EV_per_hh_PC4[indexlist,] * hhPC6matrix      #Generate EV per hh on PC6 level. 
 
-EVall[is.na(EVall)]=0                                      #Remove NA's caused by missing KM data for certain PC's
+EVpartKV[is.na(EVpartKV)]=0                                      #Remove NA's caused by missing KM data for certain PC's
 
 # Clean up variables
 rm(EVallPC4mat,AMEVPC4,EV_per_hh_PC4)
@@ -381,7 +395,6 @@ WPall     = WPallmat[indexlist,]          #Create new matrix
 
 #Remove NA's
 PVall[is.na(PVall)]=0
-EVall[is.na(EVall)]=0
 WPall[is.na(WPall)]=0
 
 # Clean up variables
@@ -421,7 +434,7 @@ for (EVii in 1:nEVscen) {
             setTxtProgressBar(progressbar,index)
             # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
             # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
-            tempScenariosperPC6 = cbind(EDSNperPC6,EVall[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
+            tempScenariosperPC6 = cbind(EDSNperPC6,EVpartKV[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
             # Apply matrix multiplication to arrive at matrices per HLD and MSR
             ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
             ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
@@ -453,7 +466,7 @@ GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 # GetPeaktimes <- function(index,profiles,scenario) {
 #    #GetPeaktimes returns the peak times per MSR in the network
 #    #
-#    #GetPeaktimes(Scenario,Allprofiles)
+#    #GetPeaktimes(Scenario,AllKVprofiles)
 #    #
 #    #Need far more RAM to program it this way
 #    #    for(jj in 1:nprofiles) {
@@ -470,19 +483,19 @@ GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 #    
 #    #Calculate peak times per Asset (If you have more RAM, you can vectorize it quite easily and win a lot of speed)
 #    for(Assetii in 1:nAssets) {
-#       Assettotalprofile                  = Allprofiles %*% scenario[Assetii,]
+#       Assettotalprofile                  = AllKVprofiles %*% scenario[Assetii,]
 #       peaktimemax[Assetii]               = which.max(Assettotalprofile)         #peaktime
 #       peaktimemin[Assetii]               = which.min(Assettotalprofile)         #peaktimemin
 #       
-#       Assetloadmax[Assetii] = Allprofiles[peaktimemax,] * scenario[Assetii,]
-#       Assetloadmin[Assetii] = Allprofiles[peaktimemin,] * scenario[Assetii,]
+#       Assetloadmax[Assetii] = AllKVprofiles[peaktimemax,] * scenario[Assetii,]
+#       Assetloadmin[Assetii] = AllKVprofiles[peaktimemin,] * scenario[Assetii,]
 #    }  
 #    
 #    outputmatrix = matrix(c(peaktimemax,peaktimemin,Assetloadmax,Assetloadmin),nAssets,4)
 #    
 # #    #Determine peak loads (start of vectorization)
-# #    MSRloadmax = Allprofiles[peaktimemax,] * scenario
-# #    MSRloadmin = Allprofiles[peaktimemin,] * scenario
+# #    MSRloadmax = AllKVprofiles[peaktimemax,] * scenario
+# #    MSRloadmin = AllKVprofiles[peaktimemin,] * scenario
 #    return(outputmatrix)
 # }
 # 
@@ -493,11 +506,11 @@ GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 # registerDoSNOW(cl)
 # tic()
 # # #Repeat profiles for fast and easy multiplication (ARRRRRRrrr)
-# # Allprofilesrepeat = array(Allprofiles,c(dim(ScenariosperMSR)[1],1,dim(Allprofiles)[1]))
+# # AllKVprofilesrepeat = array(AllKVprofiles,c(dim(ScenariosperMSR)[1],1,dim(AllKVprofiles)[1]))
 # 
 # #Calculate peak times
 # MSRtimes = foreach(ii = 1:nscenarios,.packages='slam',.combine=cbind,.verbose=FALSE) %dopar% {
-#    GetPeaktimes(ii,Allprofiles,ScenariosperMSR[,,ii])}
+#    GetPeaktimes(ii,AllKVprofiles,ScenariosperMSR[,,ii])}
 # #Close
 # toc()
 # stopCluster(cl)

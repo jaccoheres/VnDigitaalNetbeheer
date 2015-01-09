@@ -35,40 +35,65 @@ setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
 print("--Loading data (1b/6)--")
 # Asset management network data
 setwd(paste0(path,"/1. Baseload KV"))
-Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)#, sep = ";", dec="," ,colClasses = "character", stringsAsFactors=FALSE, header = TRUE)
-MSR    = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-EDSN   = read.table("EDSN.csv"                                    , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-# KVonb   = read.table("KVonbekendeHLD.csv"                       , sep = "|", dec="," ,colClasses = "character", header = TRUE)
-MSRonb  = read.table("KVonbekendeMSR.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+Users  = read.table("MSR_AANSLUITING.csv"                                , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+MSR    = read.table("MSR_AANSLUITING.csv"                                , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+EDSN   = read.table("EDSN.csv"                                           , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+# KVonb   = read.table("KVonbekendeHLD.csv"                                , sep = "|", dec="," ,colClasses = "character", header = TRUE)
+MSRonb  = read.table("KVonbekendeMSR.csv"                                , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 
 setwd(paste0(path,"/4. Kabel en MSR-gegevens"))
-HLDcap  = read.table("LS_kabel_bonoka.txt"                             , sep = "|", dec="." , header = TRUE)
-MSRcap  = read.table("MSRgegevens_bonoka.csv"                          , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-HLDspec = read.table("Match kabeltypes NHN.csv"                        , sep = ";", dec="," ,colClasses = "character", header = TRUE)
-Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv" , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+HLDcap  = read.table("LS_kabel_bonoka.txt"                               , sep = "|", dec="." , header = TRUE)
+MSRcap  = read.table("MSRgegevens_bonoka.csv"                            , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+HLDspec = read.table("Match kabeltypes NHN.csv"                          , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 
 setwd(paste0(path,"/2. Baseload GV"))
-GV            = read.table("GVBaseloadsaanstations.csv"                      , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-GVprofiletext = read.table("profielenGV.csv"                                 , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+GV            = read.table("GVBaseloadsaanstations.csv"                  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+GVprofiletext = read.table("profielenGV.csv"                             , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 
 # Klant & Markt scenario's
 setwd(paste0(path,"/5. K&M input/EV KV"))
-EV_low      = read.table("20141111_NHN_Scen1.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-EV_med      = read.table("20141111_NHN_Scen2.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-EV_high     = read.table("20141111_NHN_Scen3.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-EV_hydro    = read.table("20141111_NHN_Scen4.csv"  , sep = ",", dec="," ,colClasses = "character", header = TRUE) # This is a hydrogen vehicle scenario
-EV_profile  = read.table("EV thuislaadprofiel.csv" , sep = ";", dec=",", header = TRUE)
+EVpartKV_low      = read.table("20141111_NHN_Scen1.csv"                  , sep = ",", dec="," , header = TRUE)
+EVpartKV_hydro    = read.table("20141111_NHN_Scen4.csv"                  , sep = ",", dec="," , header = TRUE) # This is a hydrogen vehicle scenario
+EVpartKV_med      = read.table("20141111_NHN_Scen2.csv"                  , sep = ",", dec="," , header = TRUE)
+EVpartKV_high     = read.table("20141111_NHN_Scen3.csv"                  , sep = ",", dec="," , header = TRUE)
+EVpartKV_profile  = read.table("EV thuislaadprofiel.csv"                 , sep = ";", dec=",", header = TRUE)
+
+setwd(paste0(path,"/5. K&M input/EV GV"))
+EVzakKV_low      = read.table("EVZakelijkKVConvNH.csv"                   , sep = ";", dec="," , header = TRUE)
+EVzakKV_hydro    = read.table("EVZakelijkKVWaterstofNH.csv"              , sep = ";", dec="," , header = TRUE) # This is a hydrogen vehicle scenario
+EVzakKV_med      = read.table("EVZakelijkKVElekAandrNH.csv"              , sep = ";", dec="," , header = TRUE)
+EVzakKV_high     = read.table("EVZakelijkKVBattEVNH.csv"                 , sep = ";", dec="," , header = TRUE)
+
+EVzakGV_low      = read.table("EVZakelijkGVConvNH.csv"                   , sep = ";", dec="," , header = TRUE)
+EVzakGV_hydro    = read.table("EVZakelijkGVWaterstofNH.csv"              , sep = ";", dec="," , header = TRUE) # This is a hydrogen vehicle scenario
+EVzakGV_med      = read.table("EVZakelijkGVElekAandrNH.csv"              , sep = ";", dec="," , header = TRUE)
+EVzakGV_high     = read.table("EVZakelijkGVBattEVNH.csv"                 , sep = ";", dec="," , header = TRUE)
+
+EVpark_low      = read.table("EVParkeerConvNH.csv"                       , sep = ";", dec="," , header = TRUE)
+EVpark_hydro    = read.table("EVParkeerWaterstofNH.csv"                  , sep = ";", dec="," , header = TRUE) # This is a hydrogen vehicle scenario
+EVpark_med      = read.table("EVParkeerElekAandrNH.csv"                  , sep = ";", dec="," , header = TRUE)
+EVpark_high     = read.table("EVParkeerBattEVNH.csv"                     , sep = ";", dec="," , header = TRUE)
+
+EVtank_low      = read.table("EVTankstationConvNH.csv"                   , sep = ";", dec="," , header = TRUE)
+EVtank_hydro    = read.table("EVTankstationWaterstofNH.csv"              , sep = ";", dec="," , header = TRUE) # This is a hydrogen vehicle scenario
+EVtank_med      = read.table("EVTankstationElekAandrNH.csv"              , sep = ";", dec="," , header = TRUE)
+EVtank_high     = read.table("EVTankstationBattEVNH.csv"                 , sep = ";", dec="," , header = TRUE)
+
+EVzak_profile    = read.table("EV werklaadprofiel.csv"                   , sep = ";", dec=",", header = TRUE)
+EVpark_profile   = read.table("EV parkeerlaadprofiel.csv"                , sep = ";", dec=",", header = TRUE)
+EVtank_profile   = read.table("EV snellaadprofiel constant 100kW.csv"    , sep = ";", dec=",", header = TRUE)
 
 setwd(paste0(path,"/5. K&M input/PV KV"))
-PV_low     = read.table("castoutNHLow.csv"        , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-PV_med     = read.table("castoutNHMed.csv"        , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-PV_high    = read.table("castoutNHHigh.csv"       , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-PV_profile = read.table("PV_profile_dec2014.csv"  , sep = ";", dec="," , header = FALSE)
+PV_low     = read.table("castoutNHLow.csv"                               , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+PV_med     = read.table("castoutNHMed.csv"                               , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+PV_high    = read.table("castoutNHHigh.csv"                              , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+PV_profile = read.table("PV_profile_dec2014.csv"                         , sep = ";", dec="," , header = FALSE)
 
 setwd(paste0(path,"/5. K&M input/WP KV"))
-WP_low     = read.table("wp laag-2030.csv"    , sep = ";", dec="," ,colClasses = "character", header = TRUE)
-WP_med     = read.table("wp midden-2030.csv"  , sep = ";", dec="," ,colClasses = "character", header = TRUE)
-WP_high    = read.table("wp hoog-2030.csv"    , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+WP_low     = read.table("wp laag-2030.csv"                               , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+WP_med     = read.table("wp midden-2030.csv"                             , sep = ";", dec="," ,colClasses = "character", header = TRUE)
+WP_high    = read.table("wp hoog-2030.csv"                               , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 WP_profile = read.table("WP profiel_2Dec_JvdE.csv"                       , sep = ";", dec="," , header = FALSE)
 
 ######################################################### Save results
