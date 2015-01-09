@@ -51,8 +51,8 @@ print("--Calculate memory-intensive GV telemetry users (0/6)--")
 # setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
 # load('SAP_TESLA_NHN.Rda')
 # Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-
-setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+# 
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
 
 
 # load('SAP_TESLA_NHN.Rda')
@@ -493,6 +493,8 @@ close(progressbar)
 
 
 
+#Generate GV load scenarios
+print("--Generate GV scenario list (5c/6) (be patient)--")
 KVKnumber = as.numeric(GV$KVKSEGMENT)
 KVKnumber[is.na(KVKnumber)] = 3
 GV_SJV = as.numeric(GV$SJVtot)
@@ -502,6 +504,18 @@ GVMSRload = (matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
 GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 
 
+######################################################### Save results
+print("--Saving results (6/6)--")
+setwd(paste0(path,"/7. Output"))
+
+# Save necessary data
+save.image("Connections_NH_v2.RData")
+print("--Done!--")
+
+
+
+
+# For reference, a parrallel processing script per scenario
 # 
 # 
 # #Define function for peak time computation
@@ -556,12 +570,3 @@ GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
 # #Close
 # toc()
 # stopCluster(cl)
-
-
-######################################################### Save results
-print("--Saving results (6/6)--")
-setwd(paste0(path,"/7. Output"))
-
-# Save necessary data
-save.image("Connections_NH_v2.RData")
-print("--Done!--")
