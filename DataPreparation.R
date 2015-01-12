@@ -82,7 +82,7 @@ PVKMPC6       = PV_low$PC6
 
 # KV profiles
 KVbaseprofile = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
-KVEVprofile   = data.matrix(cbind(EVpartKV_profile[,2],EVzak_profile[,2]))
+KVEVprofile   = data.matrix(cbind(EVpartKV_profile,EVzak_profile))
 KVPVprofile   = data.matrix(PV_profile)
 KVWPprofile   = data.matrix(WP_profile)
 AllKVtechprofiles = as.matrix(data.table(KVEVprofile,KVPVprofile,KVWPprofile))
@@ -98,7 +98,7 @@ GVbaseprofile = matrix(KVbaseprofile[,6],length(KVbaseprofile[,6]),20)     #Fill
 GVtemp        = data.matrix(GVprofiletext)[,3:12]                      
 GVtemp        = rbind(GVtemp[-1:-288,],GVtemp[97:288,])                      #Sync the days of the week and account for leap year
 GVbaseprofile[,c(1,2,4,7,8,10,13,14,19,20)] = GVtemp
-GVEVprofile   = data.matrix(cbind(EVzak_profile[,2]))
+GVEVprofile   = data.matrix(cbind(EVzak_profile))
 AllGVtechprofiles  = as.matrix(data.table(GVEVprofile))
 
 # Calculate number of profiles per technology and generate indices which can be used to 
@@ -249,15 +249,7 @@ MSRtoOSLD = CreateInterconnectionMatrix(cbind(c(MSR$MSR,GV$netnr),c(MSR$OSLD,GV$
 OSLDtoOS = CreateInterconnectionMatrix(cbind(c(MSR$OSLD,GV$OSLD),c(MSR$OS,GV$OS)),OSLD,OS,TRUE)
 
 ############## Create other useful interconnection matrices from 'base' interconnection matrices
-print("--Create other required interconnection matrices from 'base' (3b/6)--")
-# Create interconnection matrix from users to MSR
-# KVEANtoOSLD = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, KVEANtoMSR)) 
-# KVEANtoOS   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, KVEANtoOSLD))
-# PC6toMSR    = as.simple_triplet_matrix(matprod_simple_triplet_matrix(HLDtoMSR, PC6toHLD))  
-# PC6toOSLD   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, PC6toMSR)) 
-# PC6toOS     = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, PC6toOSLD)) 
-# GVtoOSLD    = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, GVEANtoMSR)) 
-# GVtoOS      = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, GVtoOSLD)) 
+print("--Create other required interconnection matrices from 'base' (3b/6)--") 
 # Interconnection back from MSR to HLD. Equals inverse(HLDtoMSR)
 # Because HLDtoMSR is sparse and only has '1' as entry, inverse(HLDtoMSR) = t(HLDtoMSR)
 MSRtoHLD  = t(HLDtoMSR) 
@@ -437,11 +429,11 @@ EDSNperHLD = t(matprod_simple_triplet_matrix(KVEANtoHLD, EDSNperEAN))
 EDSNperMSR = t(matprod_simple_triplet_matrix(KVEANtoMSR, EDSNperEAN))
 EDSNperOSLD = t(matprod_simple_triplet_matrix(KVEANtoOSLD, EDSNperEAN))
 
-#KVbaseloadperHLD  = matrix(NA,365*24*4,nHLD) #This can be done but not on an 8RAM computer
+KVbaseloadperHLD  = matrix(NA,365*24*4,nHLD) #This can be done but not on an 8RAM computer
 KVbaseloadperMSR  = matrix(NA,365*24*4,nMSR)
 KVbaseloadperOSLD = matrix(NA,365*24*4,nOSLD)
 
-#for (i in 1:nHLD) {KVbaseloadperHLD[,i] = KVbaseprofile %*% EDSNperHLD[,i]} 
+for (i in 1:nHLD) {KVbaseloadperHLD[,i] = KVbaseprofile %*% EDSNperHLD[,i]} 
 for (i in 1:nMSR) {KVbaseloadperMSR[,i] = KVbaseprofile %*% EDSNperMSR[,i]}
 for (i in 1:nOSLD) {KVbaseloadperOSLD[,i] = KVbaseprofile %*% EDSNperOSLD[,i]}
 

@@ -93,6 +93,11 @@ WP_med     = read.table("wp midden-2030.csv"                             , sep =
 WP_high    = read.table("wp hoog-2030.csv"                               , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 WP_profile = read.table("WP profiel_2Dec_JvdE.csv"                       , sep = ";", dec="," , header = FALSE)
 
+EVpartKV_profile = rep(EVpartKV_profile[seq(1,1439,by=15),2],365) #Repeat profile to obtain a year-profile
+EVzak_profile    = rep(EVzak_profile[seq(1,1439,by=15),2],365)    #Repeat profile to obtain a year-profile
+EVpark_profile   = rep(EVpark_profile[seq(1,1439,by=15),2],365)   #Repeat profile to obtain a year-profile
+EVtank_profile   = rep(EVtank_profile[seq(1,1439,by=15),2],365)   #Repeat profile to obtain a year-profile
+
 print("--Add OS field and OS information to MSR table (2e/6)--")
 # Add OS and OS field colums to table 'MSR' for future notice
 # We lose 26 MSRs (e.g. 26 MSRs do not have a field and OS defined)
