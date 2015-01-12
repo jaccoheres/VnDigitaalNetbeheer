@@ -52,13 +52,15 @@ print("--Defining functions (1/3)--")
 # Note: this function only gives back the time at which this happens. The load itself is calculated
 # later per base, EV, PV and WP
 
-ParPeaktimeCalculationperAsset <- function(iter,nparscenarios,ScenariosperAsset,AllKVprofiles) {
+ParPeaktimeCalculationperAsset <- function(iter,nparscenarios,KVbaseloadperAsset,GVbaseloadperAsset,KVScenariosperAsset,AllKVtechprofiles,GVScenariosperAsset,AllGVtechprofiles) {
    nAssets = dim(ScenariosperAsset)[1]
    Outputmatrix = matrix(nrow = nAssets,ncol=2*nparscenarios)
    setTxtProgressBar(pb, iter)
    for(ii in 1:nparscenarios) {
       for(Assetii in 1:nAssets) {
-         Assettotalprofile = AllKVprofiles %*% ScenariosperAsset[Assetii,,(ii+(iter*nparscenarios))] + GVMSRload[Assetii,]
+         Assettotalprofile = KVbaseloadperAsset[Assetii,] + GVbaseloadperAsset[Assetii,] +
+                             AllKVtechprofiles %*% KVScenariosperAsset[Assetii,,(ii+(iter*nparscenarios))] +
+                             AllGVtechprofiles %*% GVScenariosperAsset[Assetii,,(ii+(iter*nparscenarios))] 
          Outputmatrix[Assetii,ii]               = which.max(Assettotalprofile)          #peaktime
          Outputmatrix[Assetii,nparscenarios+ii] = which.min(Assettotalprofile)          #peaktimemin
       }  
@@ -66,36 +68,18 @@ ParPeaktimeCalculationperAsset <- function(iter,nparscenarios,ScenariosperAsset,
    return(Outputmatrix)
 }
 
-ParPeaktimeCalculationperMSR <- function(iter,nparscenarios) {
-   Outputmatrix = matrix(nrow = nMSR,ncol=2*nparscenarios)
-   setTxtProgressBar(pb, iter)
-   for(ii in 1:nparscenarios) {
-      for(MSRii in 1:nMSR) {
-         MSRtotalprofile = AllKVprofiles %*% ScenariosperMSR[MSRii,,(ii+(iter*nparscenarios))] + GVuse[MSRii,]
-         Outputmatrix[MSRii,ii]               = which.max(MSRtotalprofile)          #peaktime
-         Outputmatrix[MSRii,nparscenarios+ii] = which.min(MSRtotalprofile)          #peaktimemin
-      }  
-   }
-   return(Outputmatrix)
-}
-
-# Same as above but now per OS field
-ParPeaktimeCalculationperOSLD <- function(iter,nparscenarios) {
-   Outputmatrix = matrix(nrow = nOSLD,ncol=2*nparscenarios)
-   setTxtProgressBar(pb, iter)
-   for(ii in 1:nparscenarios) {
-      for(OSLDii in 1:nOSLD) {
-         OSLDtotalprofile = AllKVprofiles %*% ScenariosperOSLD[OSLDii,,(ii+(iter*nparscenarios))] + GVMSRload[Assetii,]
-         Outputmatrix[OSLDii,ii]               = which.max(OSLDtotalprofile)          #peaktime
-         Outputmatrix[OSLDii,nparscenarios+ii] = which.min(OSLDtotalprofile)          #peaktimemin
-      }  
-   }
-   return(Outputmatrix)
+FindLoadperAsset <- function(KVbaseloadperAsset,GVbaseloadperAsset,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperAsset,GVScenariosperAsset,peaktimeperAsset) {
+  KVtempAsset             = AllKVtechprofiles[peaktimeperAsset,] * KVScenariosperAsset
+  GVtempAsset             = AllGVtechprofiles[peaktimeperAsset,] * GVScenariosperAsset
+  Assetload[baseorder,ii] = KVbaseloadperAsset[,peaktimeperAsset] + GVbaseloadperAsset[,peaktimeperAsset]
+  Assetload[EVorder,ii]   = rowsums(KVtempAsset[,KVEVindex]) + GVtempAsset[,GVEVindex]
+  Assetload[PVorder,ii]   = KVtempAsset[,KVPVindex]
+  Assetload[WPorder,ii]   = KVtempAsset[,KVWPindex] 
+  return(Assetload)
 }
 
 print("--Calculation based on peaktime per MSR (2/3)--")
 # Initialise matrices which will hold the peak time and minimum peak time (feedin) per MSR 
-
 MSRpeaktimetemp      = matrix(nrow = nMSR,  ncol = 2*nscenarios)
 MSRpeaktime_MSR      = matrix(nrow = nMSR,  ncol = nscenarios)
 MSRpeaktimemin_MSR   = matrix(nrow = nMSR,  ncol = nscenarios)
@@ -112,10 +96,9 @@ cl<-makeCluster(nCPUs)
 registerDoSNOW(cl)
 pb = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 tic()
-MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1), 
-                          .packages='slam', 
-                          .combine=cbind,
-                          .verbose=FALSE) %dopar% {ParPeaktimeCalculationperAsset(iter,nparscenarios,ScenariosperMSR,AllKVprofiles)}
+MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=cbind, .verbose=FALSE) %dopar% {
+  ParPeaktimeCalculationperAsset(iter,nparscenarios,KVbaseloadperMSR,GVbaseloadperMSR,KVScenariosperMSR,AllKVtechprofiles,GVScenariosperMSR,AllGVtechprofiles)
+}
 
 toc()
 stopCluster(cl)
@@ -126,13 +109,14 @@ close(pb)
 # Because peaktimes are processed parallelly, we need to re-order the columns.
 # Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
 # Results are re-ordered below and stored in two separate matrices
-indexlist = rep(c(rep(TRUE,nPVscen*nWPscen*nyears),rep(FALSE,nPVscen*nWPscen*nyears)),nCPUs)
+indexlist          = rep(c(rep(TRUE,nPVscen*nWPscen*nyears),rep(FALSE,nPVscen*nWPscen*nyears)),nCPUs)
 MSRpeaktime_MSR    = MSRpeaktimetemp[,indexlist]
 MSRpeaktimemin_MSR = MSRpeaktimetemp[,!indexlist]
 rm(MSRpeaktimetemp)
 
 print("--> Cascading peak times per MSR to HLDs (2b/3)--")
 # Peak time per HLD is calculated by using MSRtoHLD interconnection matrices
+# TO DO!! Account for HLDs which are connected to multiple MSRs
 tic()
 HLDpeaktime_MSR     = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktime_MSR)
 HLDpeaktimemin_MSR  = matprod_simple_triplet_matrix(MSRtoHLD,MSRpeaktimemin_MSR)
@@ -141,15 +125,12 @@ toc()
 print("--> Calculating loads per MSR and HLD based on peak times per MSR (2c/3)--")
 # Based on the peak times, the minimum and maximum load is then found.
 # Initialise  matrices
-tempOSLD        = matrix(nrow = nOSLD, ncol = nprofiles)
-tempMSR         = matrix(nrow = nMSR, ncol = nprofiles)
-tempHLD         = matrix(nrow = nHLD, ncol = nprofiles)
-OSLDload_MSR    = matrix(nrow = 4*nOSLD, ncol = nscenarios)
-OSLDloadmin_MSR = matrix(nrow = 4*nOSLD, ncol = nscenarios)
-MSRload_MSR     = matrix(nrow = 4*nMSR, ncol = nscenarios)
-MSRloadmin_MSR  = matrix(nrow = 4*nMSR, ncol = nscenarios)
-HLDload_MSR     = matrix(nrow = 4*nHLD, ncol = nscenarios)
-HLDloadmin_MSR  = matrix(nrow = 4*nHLD, ncol = nscenarios)
+OSLDload_MSR      = matrix(nrow = 4*nOSLD, ncol = nscenarios)
+OSLDloadmin_MSR   = matrix(nrow = 4*nOSLD, ncol = nscenarios)
+MSRload_MSR       = matrix(nrow = 4*nMSR, ncol = nscenarios)
+MSRloadmin_MSR    = matrix(nrow = 4*nMSR, ncol = nscenarios)
+HLDload_MSR       = matrix(nrow = 4*nHLD, ncol = nscenarios)
+HLDloadmin_MSR    = matrix(nrow = 4*nHLD, ncol = nscenarios)
 
 # Because we already have the peak times, no matrix multiplications are required here,
 # only element-wise multiplications of profile[peaktime]*[SJV,nEV,nPV,nWP]
@@ -159,31 +140,15 @@ for(ii in 1:nscenarios) {
    setTxtProgressBar(progressbar,ii)
    
    # For each scenario, we find the load from AllKVprofiles which corresponds with the peak time per MSR 
-   # and multiply this element wise with a vector containing [SJV,nEV,nPV,nWP]
-   # This gives a matrix tempMSR with dimension [nMSR * nprofiles]
-   # in the second step, this matrix is truncated so that different profiles which correspond to the same load
-   # (e.g. 10 EDSN profiles which all correspond to the 'base' load) are summed up into 1 value
+   # and multiply this element wise with a vector containing [nEV,nPV,nWP]
+   # This gives a matrix tempMSR with dimension [nMSR * ntechprofiles]
    
-   #peak load per MSR  
-   tempMSR = Allprofiles[MSRpeaktime_MSR[,ii],] * ScenariosperMSR[,,ii]
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktime_MSR[,ii]),nMSR,)],tempMSR[,EVKVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
-   MSRload_MSR[,ii] = c(tempMSR)
-   
-   #minimum peak load per MSR (=maximum feedin)
-   tempMSR = Allprofiles[MSRpeaktimemin_MSR[,ii],] * ScenariosperMSR[,,ii]
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktimemin_MSR[,ii]),nMSR,)],tempMSR[,EVKVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
-   MSRloadmin_MSR[,ii] = c(tempMSR)
-   
-   #peak load per HLD 
-   tempHLD = AllKVprofiles[HLDpeaktime_MSR[,ii],] * ScenariosperHLD[,,ii]
-   tempHLD = cbind(rowSums(tempHLD[,baseprofileindex]),tempHLD[,EVKVprofileindex],tempHLD[,PVprofileindex],tempHLD[,WPprofileindex])
-   HLDload_MSR[,ii] = c(tempHLD)
-   
-   #minimum load per HLD (=maximum feedin)
-   tempHLD = AllKVprofiles[HLDpeaktimemin_MSR[,ii],] * ScenariosperHLD[,,ii]
-   tempHLD = cbind(rowSums(tempHLD[,baseprofileindex]),tempHLD[,EVKVprofileindex],tempHLD[,PVprofileindex],tempHLD[,WPprofileindex])  
-   HLDloadmin_MSR[,ii] = c(tempHLD)
-   
+   #peak load per MSR 
+   MSRload_MSR    = FindLoadperAsset(KVbaseloadperMSR,GVbaseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktime_MSR[,ii])
+   MSRloadmin_MSR = FindLoadperAsset(KVbaseloadperMSR,GVbaseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktimemin_MSR[,ii])
+   #peak load per HLD
+   HLDload_MSR    = FindLoadperAsset(KVbaseloadperHLD,GVbaseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktime_MSR[,ii])   
+   HLDloadmin_MSR = FindLoadperAsset(KVbaseloadperHLD,GVbaseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktimemin_MSR[,ii])      
 }
 toc()
 close(progressbar)
@@ -211,11 +176,9 @@ cl<-makeCluster(nCPUs)
 registerDoSNOW(cl)
 pb = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 tic()
-OSLDpeaktimetemp = foreach(iter = 0:(nCPUs-1), 
-                           .packages='slam', 
-                           .combine=cbind,
-                           .verbose=FALSE) %dopar% {ParPeaktimeCalculationperOSLD(iter,nparscenarios)}
-
+OSLDpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=cbind,.verbose=FALSE) %dopar% {
+  ParPeaktimeCalculationperAsset(iter,nparscenarios,KVbaseloadperOSLD,GVbaseloadperOSLD,KVScenariosperOSLD,AllKVtechprofiles,GVScenariosperOSLD,AllGVtechprofiles)
+}
 toc()
 stopCluster(cl)
 close(pb)
@@ -240,9 +203,6 @@ toc()
 # Based on the peak times, the minimum and maximum load is then found.
 print("--Calculate loads in network per OSLD--")
 # Initialise  matrices
-tempOSLD         = matrix(nrow = nOSLD, ncol = nprofiles)
-tempMSR          = matrix(nrow = nMSR, ncol = nprofiles)
-tempHLD          = matrix(nrow = nHLD, ncol = nprofiles)
 OSLDload_OSLD    = matrix(nrow = 4*nOSLD, ncol = nscenarios)
 OSLDloadmin_OSLD = matrix(nrow = 4*nOSLD, ncol = nscenarios)
 MSRload_OSLD     = matrix(nrow = 4*nMSR, ncol = nscenarios)
@@ -262,43 +222,19 @@ for(ii in 1:nscenarios) {
    # This gives a matrix tempMSR with dimension [nMSR * nprofiles]
    # in the second step, this matrix is truncated so that different profiles which correspond to the same load
    # (e.g. 10 EDSN profiles which all correspond to the 'base' load) are summed up into 1 value
-   
-   #peak load per OSLD  
-   tempOSLD = Allprofiles[OSLDpeaktime_OSLD[,ii],] * ScenariosperOSLD[,,ii]
-   tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]) + GVOSLDload[matrix(c(1:nOSLD,OSLDpeaktime_OSLD[,ii]),nOSLD,)],tempOSLD[,EVKVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
-   OSLDload_OSLD[,ii] = c(tempOSLD)
-   
-   #minimum peak load per OSLD (=maximum feedin)
-   tempOSLD = Allprofiles[OSLDpeaktimemin_OSLD[,ii],] * ScenariosperOSLD[,,ii]
-   tempOSLD = cbind(rowSums(tempOSLD[,baseprofileindex]) + GVOSLDload[matrix(c(1:nOSLD,OSLDpeaktimemin_OSLD[,ii]),nOSLD,)],tempOSLD[,EVKVprofileindex],tempOSLD[,PVprofileindex],tempOSLD[,WPprofileindex])
-   OSLDloadmin_OSLD[,ii] = c(tempOSLD)
-   
-   #peak load per MSR  
-   tempMSR = AllKVprofiles[MSRpeaktime_OSLD[,ii],] * ScenariosperMSR[,,ii] #doesn't work because MSRpeaktime_OSLD is not full rank because some MSRs cannot be connected to OS
-   tempMSR[is.na(tempMSR)] = 0
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktime_OSLD[,ii]),nMSR,)],tempMSR[,EVKVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
-   MSRload_OSLD[,ii] = c(tempMSR)
-   
-   #minimum peak load per MSR (=maximum feedin)
-   tempMSR = AllKVprofiles[MSRpeaktimemin_OSLD[,ii],] * ScenariosperMSR[,,ii]
-   tempMSR[is.na(tempMSR)] = 0
-   tempMSR = cbind(rowSums(tempMSR[,baseprofileindex]) + GVMSRload[matrix(c(1:nMSR,MSRpeaktime_OSLD[,ii]),nMSR,)],tempMSR[,EVKVprofileindex],tempMSR[,PVprofileindex],tempMSR[,WPprofileindex])
-   MSRloadmin_OSLD[,ii] = c(tempMSR)
-   
-   #peak load per HLD 
-   tempHLD = AllKVprofiles[HLDpeaktime_OSLD[,ii],] * ScenariosperHLD[,,ii]
-   tempHLD = cbind(rowSums(tempHLD[,baseprofileindex]),tempHLD[,EVKVprofileindex],tempHLD[,PVprofileindex],tempHLD[,WPprofileindex])
-   HLDload_OSLD[,ii] = c(tempHLD)
-   
-   #minimum load per HLD (=maximum feedin)
-   tempHLD = AllKVprofiles[HLDpeaktimemin_OSLD[,ii],] * ScenariosperHLD[,,ii]
-   tempHLD = cbind(rowSums(tempHLD[,baseprofileindex]),tempHLD[,EVKVprofileindex],tempHLD[,PVprofileindex],tempHLD[,WPprofileindex])  
-   HLDloadmin_OSLD[,ii] = c(tempHLD)
-   
+
+   #peak load per OSLD 
+   OSLDload_OSLD    = FindLoadperAsset(KVbaseloadperOSLD,GVbaseloadperOSLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperOSLD[,,ii],GVScenariosperOSLD[,,ii],OSLDpeaktime_OSLD[,ii])
+   OSLDloadmin_OSLD = FindLoadperAsset(KVbaseloadperOSLD,GVbaseloadperOSLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperOSLD[,,ii],GVScenariosperOSLD[,,ii],OSLDpeaktimemin_OSLD[,ii])
+   #peak load per MSR 
+   MSRload_OSLD     = FindLoadperAsset(KVbaseloadperMSR,GVbaseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktime_OSLD[,ii])
+   MSRloadmin_OSLD  = FindLoadperAsset(KVbaseloadperMSR,GVbaseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktimemin_OSLD[,ii])
+   #peak load per HLD
+   HLDload_OSLD     = FindLoadperAsset(KVbaseloadperHLD,GVbaseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktime_OSLD[,ii])   
+   HLDloadmin_OSLD  = FindLoadperAsset(KVbaseloadperHLD,GVbaseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktimemin_OSLD[,ii])     
 }
 toc()
 close(progressbar)
-rm(tempOSLD,tempHLD,tempMSR)
 ######################################################### Save results
 print("--Saving results--")
 setwd(paste0(path,"/7. Output"))
@@ -326,6 +262,35 @@ print("--Done!--")
 #       col=I('blue'),size=1,legend=F,main="Overbelaste MSR versus toename baseload")
 # geom_line(aes(factor, outcome, colour=I('red')), d1)
 # dev.off()
+
+###### For reference, peak time calculations per individual asset
+#
+# ParPeaktimeCalculationperMSR <- function(iter,nparscenarios) {
+#    Outputmatrix = matrix(nrow = nMSR,ncol=2*nparscenarios)
+#    setTxtProgressBar(pb, iter)
+#    for(ii in 1:nparscenarios) {
+#       for(MSRii in 1:nMSR) {
+#          MSRtotalprofile = AllKVprofiles %*% ScenariosperMSR[MSRii,,(ii+(iter*nparscenarios))] + GVuse[MSRii,]
+#          Outputmatrix[MSRii,ii]               = which.max(MSRtotalprofile)          #peaktime
+#          Outputmatrix[MSRii,nparscenarios+ii] = which.min(MSRtotalprofile)          #peaktimemin
+#       }  
+#    }
+#    return(Outputmatrix)
+# }
+# 
+# # Same as above but now per OS field
+# ParPeaktimeCalculationperOSLD <- function(iter,nparscenarios) {
+#    Outputmatrix = matrix(nrow = nOSLD,ncol=2*nparscenarios)
+#    setTxtProgressBar(pb, iter)
+#    for(ii in 1:nparscenarios) {
+#       for(OSLDii in 1:nOSLD) {
+#          OSLDtotalprofile = AllKVprofiles %*% ScenariosperOSLD[OSLDii,,(ii+(iter*nparscenarios))] + GVMSRload[Assetii,]
+#          Outputmatrix[OSLDii,ii]               = which.max(OSLDtotalprofile)          #peaktime
+#          Outputmatrix[OSLDii,nparscenarios+ii] = which.min(OSLDtotalprofile)          #peaktimemin
+#       }  
+#    }
+#    return(Outputmatrix)
+# }
 
 # For reference, code from Werner van Westering
 # # scenarios = cbind(base,PVall[,35:51]*PVpeak+EVall[,35:51]*EVpeak+WPall[,35:51]*WPpeak)

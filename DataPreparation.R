@@ -41,22 +41,6 @@ library(utils)
 path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 
 ################################################################################ Initialise variables and load data 
-print("--Calculate memory-intensive GV telemetry users (0/6)--")
-
-# telemetrylist = list.files(paste0(path,"/2. Baseload GV/2. SAP TESLA"), pattern = '.csv')
-# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
-# for(ii in 1:2){#length(telemetrylist)){
-#    GVtel  = read.table(telemetrylist[ii] , sep = ",", dec=":" ,colClasses = "character", header = TRUE)   
-# }
-# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
-# load('SAP_TESLA_NHN.Rda')
-# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-# 
-# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
-
-
-# load('SAP_TESLA_NHN.Rda')
-# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
 
 print("--Initializing basic variables (1a/6)--")
 startyear = 2014
@@ -65,8 +49,16 @@ nEVscen   = 4
 nPVscen   = 3
 nWPscen   = 3
 nCPUs     = 4
+nKVtech   = 3     # number of modeled technologies for KV (EV, PV, WP)
+nGVtech   = 1     # number of modeled technologies for GV (EV)
+# order
+baseorder = 1
+EVorder   = 2
+PVorder   = 3
+WPorder   = 4
 
 print("--Loading data (1b/6)--")
+setwd(paste0(path,"/7. Output"))
 load("Data_NH_v2.RData")
 
 ################################################################################## Clean up data
@@ -76,68 +68,85 @@ print("--Converting variables to matrices (2a/6)--")
 EVpartKVPC4mat= cbind(data.matrix(EVpartKV_low)[,3:19],data.matrix(EVpartKV_hydro)[,3:19],data.matrix(EVpartKV_med)[,3:19],data.matrix(EVpartKV_high)[,3:19])
 EVzakKVEANmat = cbind(data.matrix(EVzakKV_low)[,2:18],data.matrix(EVzakKV_hydro)[,2:18],data.matrix(EVzakKV_med)[,2:18],data.matrix(EVzakKV_high)[,2:18])
 EVzakGVEANmat = cbind(data.matrix(EVzakGV_low)[,2:18],data.matrix(EVzakGV_hydro)[,2:18],data.matrix(EVzakGV_med)[,2:18],data.matrix(EVzakGV_high)[,2:18])
-EVparkPC6mat  = cbind(data.matrix(EVpark_low)[,2:18],data.matrix(EVpark_hydro)[,2:18],data.matrix(EVpark_med)[,2:18],data.matrix(EVpark_high)[,2:18])
-EVtankEANmat  = cbind(data.matrix(EVtank_low)[,2:18],data.matrix(EVtank_hydro)[,2:18],data.matrix(EVtank_med)[,2:18],data.matrix(EVtank_high)[,2:18])
+# EVparkPC6mat  = cbind(data.matrix(EVpark_low)[,2:18],data.matrix(EVpark_hydro)[,2:18],data.matrix(EVpark_med)[,2:18],data.matrix(EVpark_high)[,2:18])
+# EVtankEANmat  = cbind(data.matrix(EVtank_low)[,2:18],data.matrix(EVtank_hydro)[,2:18],data.matrix(EVtank_med)[,2:18],data.matrix(EVtank_high)[,2:18])
 PVallmat      = cbind(data.matrix(PV_low)[,6:22],data.matrix(PV_med)[,6:22],data.matrix(PV_high)[,6:22])
 WPallmat      = cbind(data.matrix(WP_low)[,2:18],data.matrix(WP_med)[,2:18],data.matrix(WP_high)[,2:18])
 
-baseprofile   = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
-#EVKVprofile   = #data.matrix(cbind(EVpartKV_profile[,2],EVzak_profile[,2],EVpark_profile[,2]))
-EVKVprofile   = data.matrix(EVpartKV_profile[,2])
-EVGVprofile   = data.matrix(cbind(EVzak_profile[,2],EVtank_profile[,2]))
-# EVprofile     = data.matrix(cbind(EVpartKV_profile[,2],EVzak_profile[,2],EVpark_profile[,2],EVtank_profile[,2]))
-PVprofile     = data.matrix(PV_profile)
-WPprofile     = data.matrix(WP_profile)
-
+# Helpful variables related to modeled technologies
 PC4           = data.matrix(EVpartKV_low)[,2]
+EVzakKVEAN    = EVzakKV_low$EAN
+EVzakGVEAN    = EVzakGV_low$EAN
 WPKMPC6       = WP_low$PC6
 PVKMPC6       = PV_low$PC6
 
-GVprofile     = matrix(baseprofile[,6],length(baseprofile[,6]),20)     #Fill gaps in GVprofile with the EDSN E3A profile (baseprofile[,6])
+# KV profiles
+KVbaseprofile = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
+KVEVprofile   = data.matrix(cbind(EVpartKV_profile[,2],EVzak_profile[,2]))
+KVPVprofile   = data.matrix(PV_profile)
+KVWPprofile   = data.matrix(WP_profile)
+AllKVtechprofiles = as.matrix(data.table(KVEVprofile,KVPVprofile,KVWPprofile))
+
+# define indices how KV profiles are ordered. KV profiles are coupled on either PC6 or EAN
+# currently vector AllKVtechprofiles is ordered as
+# [PC6, EAN, PC6, PC6] (addressing EVpartKV(PC6),EVzakKV(EAN),KVPV(PC6),KVWP(PC6))
+KVPC6index    = c(1,3,4)
+KVEANindex    = 2
+
+#GV profiles
+GVbaseprofile = matrix(KVbaseprofile[,6],length(KVbaseprofile[,6]),20)     #Fill gaps in GVprofile with the EDSN E3A profile (baseprofile[,6])
 GVtemp        = data.matrix(GVprofiletext)[,3:12]                      
 GVtemp        = rbind(GVtemp[-1:-288,],GVtemp[97:288,])                      #Sync the days of the week and account for leap year
-GVprofile[,c(1,2,4,7,8,10,13,14,19,20)] = GVtemp
+GVbaseprofile[,c(1,2,4,7,8,10,13,14,19,20)] = GVtemp
+GVEVprofile   = data.matrix(cbind(EVzak_profile[,2]))
+AllGVtechprofiles  = as.matrix(data.table(GVEVprofile))
+
+# Calculate number of profiles per technology and generate indices which can be used to 
+# address a technology in "AllKVprofiles" (e.g. EV profiles = AllKVprofiles[,EVprofileindex])
+# 1. number of KV profiles
+nKVbaseprofile  = max(dim(KVbaseprofile)[2],1)
+nKVtechprofiles = max(dim(AllKVtechprofiles)[2],1)
+nKVprofiles     = nKVbaseprofile + nKVtechprofiles
+nKVEVprofile    = max(dim(KVEVprofile)[2],1)
+nKVPVprofile    = max(dim(KVPVprofile)[2],1)
+nKVWPprofile    = max(dim(KVWPprofile)[2],1)
+# 2. KV base indices
+KVbaseindex     = 1:nKVbaseprofile
+# 3. KV tech indices
+KVEVindex       = 1:nKVEVprofile
+KVPVindex       = (nKVEVprofile+1):(nKVEVprofile+nKVPVprofile)
+KVWPindex       = (nKVEVprofile+nKVPVprofile+1):(nKVEVprofile+nKVPVprofile+nKVWPprofile)
+
+# 4. number of GV profiles
+nGVbaseprofile  = max(dim(GVbaseprofile)[2],1)
+nGVtechprofiles = max(dim(AllGVtechprofiles)[2],1)
+nGVprofiles     = nGVbaseprofile + nGVtechprofiles
+nGVEVprofile    = max(dim(GVEVprofile)[2],1)
+# 5. GV base indices
+GVbaseindex     = 1:nGVbaseprofile
+# 6. GV tech indices
+GVEVindex       = 1:nGVEVprofile
 
 #clean up workspace
-rm(EV_low, EV_med, EV_high, EV_hydro, PV_low, PV_med, PV_high, WP_low, WP_med, WP_high, EVpartKV_profile, EVzak_profile, EVpark_profile, EVtank_profile, PV_profile, WP_profile, EDSN)
+# fix after fixing naming conventions
+# rm(EV_low, EV_med, EV_high, EV_hydro, PV_low, PV_med, PV_high, WP_low, WP_med, WP_high, EVpartKV_profile, EVzak_profile, EVpark_profile, EVtank_profile, PV_profile, WP_profile, EDSN)
 
 # Data cleanup: shorten ARI to PC6
 Users$ARI_ADRES = substr(Users$ARI_ADRES, 1, 6)
+MSR$ARI_ADRES = substr(MSR$ARI_ADRES, 1, 6)
 
 print("--Cleaning up and indexing yearprofiles (2b/6)--")
 # Convert K&M EV, WP and PV profiles to a year-profile with a 15 minute interval, and combine all profiles into "AllKVprofiles" vector                
-AllKVprofiles = as.matrix(data.table(baseprofile,EVKVprofile,PVprofile,WPprofile))
-#AllGVprofile  = as.matrix(data.table(EVGVprofile))
 
-# Calculate number of profiles per technology 
-nprofiles = dim(AllKVprofiles)[2]
-nbaseprofile = max(dim(baseprofile)[2],1)
-nEVKVprofile = max(dim(EVKVprofile)[2],1)
-nEVGVprofile = max(dim(EVGVprofile)[2],1)
-nPVprofile = max(dim(PVprofile)[2],1)
-nWPprofile = max(dim(WPprofile)[2],1)
-
-# Create indices which can be used to address a technology in "AllKVprofiles" (e.g. EV profiles = AllKVprofiles[,EVprofileindex])
-baseprofileindex = 1:nbaseprofile
-EVKVprofileindex = (nbaseprofile+1):(nbaseprofile+nEVKVprofile)
-PVprofileindex = (nbaseprofile+nEVKVprofile+1):(nbaseprofile+nEVKVprofile+nPVprofile)
-WPprofileindex = (nbaseprofile+nEVKVprofile+nWPprofile+1):(nbaseprofile+nEVKVprofile+nPVprofile+nWPprofile)
-
-EVGVprofileindex = 1:nEVGVprofile
-
-print("--Create lists of unique PC6, LSLD, HLD and MSR elements (2c/6)--")
-# Create list with unique PC6 codes
-PC6     = sort(unique(Users$ARI_ADRES))
-# Create list with LSLD codes
+print("--Create unique lists of assets and PC6 (2c/6)--")
+KVEAN   = unique(MSR$EAN)
+GVEAN   = unique(GV$EAN)
+PC6     = sort(unique(MSR$ARI_ADRES))
 LSLD    = sort(unique(Users$LS_KABELS_ID))
 LSLD    = substr(LSLD, 1, 9)
-# Create list with HLD codes
 HLD     = sort(unique(Users$HOOFDLEIDING))
-# Create list with MSR codes
 MSRlist = unique(c(MSR$MSR,GV$netnr))   # Retrieve MSR numbers
-# Create list with OS fields
 OSLD    = unique(MSRcap$ROUTENAAM)
-# Create list with OS
 OS      = unique(MSRcap$OS_NAAM)
 # Calculate number of households per PC6
 hhPC6   = table(Users$ARI_ADRES)        
@@ -150,23 +159,11 @@ SJVlow = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK_LAAG)) *4 #SJVlow i
 SJVlow[is.na(SJVlow)] = 0                                              #Remove missing entries
 SJV[is.na(SJV)] = 0                                                    #Remove missing entries
 
-EDSNperPC6 = data.table(Users$ARI_ADRES,Users$PROFIEL_TYPE,SJV+SJVlow)
-EDSNperPC6 = group_by(EDSNperPC6, V1,V2)
-EDSNperPC6 = summarise(EDSNperPC6, SJV = sum(V3))
-EDSNperPC6 = as.matrix(dcast(EDSNperPC6,V1~V2)[3:12])
-EDSNperPC6[is.na(EDSNperPC6)]=0
-
-print("--Add OS field and OS information to MSR table (2e/6)--")
-# Add OS and OS field colums to table 'MSR' for future notice
-# We lose 26 MSRs (e.g. 26 MSRs do not have a field and OS defined)
-indexlist = match(MSR$MSR,MSRcap$NUMMER_BEH)
-MSR       = data.frame(MSR,"OSLD"=MSRcap$ROUTENAAM[indexlist],"OS"=MSRcap$OS_NAAM[indexlist])
-MSR$OSLD  = as.character(MSR$OSLD)
-MSR$OS    = as.character(MSR$OS)
-indexlist = match(GV$netnr,MSRcap$NUMMER_BEH)
-GV        = data.frame(GV,"OSLD"=MSRcap$ROUTENAAM[indexlist],"OS"=MSRcap$OS_NAAM[indexlist])
-GV$OSLD   = as.character(GV$OSLD)
-GV$OS     = as.character(GV$OS)
+# EDSNperPC6 = data.table(Users$ARI_ADRES,Users$PROFIEL_TYPE,SJV+SJVlow)
+# EDSNperPC6 = group_by(EDSNperPC6, V1,V2)
+# EDSNperPC6 = summarise(EDSNperPC6, SJV = sum(V3))
+# EDSNperPC6 = as.matrix(dcast(EDSNperPC6,V1~V2)[3:12])
+# EDSNperPC6[is.na(EDSNperPC6)]=0
 
 #######BRRRRRroken
 # ## Account for unconnected KV PC6 peak loads
@@ -204,121 +201,63 @@ GV$OS     = as.character(GV$OS)
 # so the calculations become rediciously fast. The connection matrix essentially describes how many
 # households of each PC6 are connected to each LSLD.
 print("--Create connection matrices (3/6)--")
-print("--Filling sparse connection matrix for PC6 to HLD (3a/6)--")
 
-# Define the matrix
-#PC6toLSLD = simple_triplet_zero_matrix(nrow = length(LSLD), ncol = length(PC6))
-PC6toHLD = simple_triplet_zero_matrix(nrow = length(HLD), ncol = length(PC6))
-
-# Fill the sparse connection matrix (Warning: Complicated code incoming)
-progressbar = txtProgressBar(min = 0, max = length(PC6), initial = 0, char = "=", style = 3)
-
-tic()
-# foreach (ii=1:50) %dopar%  { #Unfortunately parallel processing of sparse matrices is 
-# not trivial. I have to save the results into a list format and then create the sparse matrix... Another time.
-for (ii in 1:length(PC6)){ #I have chosen to do the computations column-wise, because it saves computations
-   setTxtProgressBar(progressbar,ii)
-   # Find how many households of each PC6 are in each LSLD
-   indeces  = Users$ARI_ADRES==PC6[ii];     #Find EANs which are part of current PC
-   #LSLDs    = Users$LS_KABELS_ID[indeces]  #Retrieve LSLDs of EANs which are part of current PC
-   #numLSLD  = table(LSLDs)                 #Count how often each LSLD is present
-   HLDs     = Users$HOOFDLEIDING[indeces]   #Retrieve LSLDs of EANs which are part of current PC
-   numHLD   = table(HLDs)                   #Count how often each LSLD is present
-   
-   # Find out in which indeces to store the results
-   #LSLDuniq  = unique(LSLDs)               #Find unique LSLDs
-   #LSLDindex = which(LSLD %in% LSLDuniq)   #Convert LSLDs into indeces
-   HLDuniq  = unique(HLDs)                  #Find unique LSLDs
-   HLDindex = which(HLD %in% HLDuniq)       #Convert LSLDs into indeces   
-   
-   # Save the resutls
-   #PC6toLSLD[LSLDindex,ii] = numLSLD/hhPC6[ii]         #Store LSLD count in correct column on correct spot
-   PC6toHLD[HLDindex,ii] = numHLD/hhPC6[ii]            #Store HLD count in correct column on correct spot
+CreateInterconnectionMatrix <- function(FromTo,FromReferenceList,ToReferenceList,makeUnique) {
+  #INPUT: 
+  #FromTo            = elements which will be coupled (example c(MSR$HOOFDLEIDING,MSR$MSR))
+  #FromReferenceList = unique list of From-elements (example: variable 'HLD')
+  #ToReferenceList   = unique list of To-elements (example: variable 'MSRlist')
+  
+  if(makeUnique) {FromTo = unique(FromTo)}
+  #define indices
+  Fromindexlist = match(FromTo[,1],FromReferenceList)
+  Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the MSR index for each MSR ID
+  NANlist       = is.na(Toindexlist)==FALSE
+  
+  #Create connection matrix
+  i             = Toindexlist[NANlist]
+  j             = Fromindexlist[NANlist]
+  v_weights     = table(Fromindexlist[NANlist])
+  v             = rep(1/v_weights,v_weights)
+  if(makeUnique) {ncols = length(FromReferenceList)} else {ncols = length(FromTo[,1])}
+  Outputmatrix = simple_triplet_matrix(i, j, v, nrow = length(ToReferenceList), ncols, dimnames = NULL) 
+  return(Outputmatrix)
 }
-close(progressbar)
-toc()
 
-# Create HLD to MSR connection matrix
-print("--Filling sparse connection matrix for HLD to MSR (3b/6)--")
-# Define the matrix
-HLDtoMSRlist= MSR$HOOFDLEIDING              # Retrieve the HLD cables connected to each User
+print("--> Build up connection matrices (3a/6)--")
+# KVEAN to asset 
+KVEANtoPC6  = CreateInterconnectionMatrix(MSR[c("EAN","ARI_ADRES")],KVEAN,PC6,FALSE)      #Only use this for missing KV baseload. Couple EAN directly to asset using KVEANtoHLD
+KVEANtoHLD  = CreateInterconnectionMatrix(MSR[c("EAN","HOOFDLEIDING")],KVEAN,HLD,FALSE)
+KVEANtoMSR  = CreateInterconnectionMatrix(MSR[c("EAN","MSR")],KVEAN,MSRlist,FALSE)
+KVEANtoOSLD = CreateInterconnectionMatrix(MSR[c("EAN","OSLD")],KVEAN,OSLD,FALSE)
+KVEANtoOS   = CreateInterconnectionMatrix(MSR[c("EAN","OS")],KVEAN,OS,FALSE)
 
-indexlist    = match(HLD,HLDtoMSRlist)      # Search for HLD_IDs in HLD_MSR list
-MSRwithHLD   = MSR$MSR[indexlist]            # Get the MSR IDs for the corresponding HLDs
-MSRindexlist = match(MSRwithHLD,MSRlist)    # Find the MSR index for each MSR ID
-NANlist      = is.na(MSRindexlist)==FALSE   # Remove all NA's (i.e. HLDs which are not matched)
+# GVEAN to asset 
+GVEANtoMSR  = CreateInterconnectionMatrix(GV[c("EAN_CODE","netnr")],GVEAN,MSRlist,FALSE)
+GVEANtoOSLD = CreateInterconnectionMatrix(GV[c("EAN_CODE","OSLD")],GVEAN,OSLD,FALSE)
+GVEANtoOS   = CreateInterconnectionMatrix(GV[c("EAN_CODE","OS")],GVEAN,OS,FALSE)
 
-#Create connection matrix
-HLDindex     = 1:length(HLD)
-HLDNANindex  = HLDindex[NANlist]
-i            = MSRindexlist[NANlist]
-j            = HLDNANindex
-v            = matrix(1,length(HLDNANindex),1)
-HLDtoMSR     = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = max(j),dimnames = NULL)
+# PC6 to asset
+PC6toHLD   = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","HOOFDLEIDING")],PC6,HLD,TRUE)
+PC6toMSR   = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","MSR")],PC6,MSRlist,TRUE)
+PC6toOSLD  = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","OSLD")],PC6,OSLD,TRUE)
+PC6toOS    = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","OS")],PC6,OS,TRUE)
 
-# Create GV to MSR connection matrix
-print("--Filling sparse connection matrix for GV to MSR (3c/6)--")
-# Define the matrix
-GVtoMSRlist  = GV$netnr # Retrieve the GVs connected to each MSR
-
-indexlist    = match(GVtoMSRlist,MSRlist)    # Match the MSR IDs
-# GVuse        = as.numeric(GV$SJVtot)*4*as.numeric(GV$maxfrac2) #Factor 4 is for the conversion from quarters to hours
-KVKnumber = as.numeric(GV$KVKSEGMENT)
-KVKnumber[is.na(as.numeric(GV$KVKSEGMENT))] = 3
-GVuse        = (t(GVprofile[,KVKnumber])*as.numeric(GV$SJVtot)*4)
-i = indexlist
-j = 1:length(GV$netnr)
-v = matrix(1,length(GV$netnr),1)
-GVtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = length(GV$netnr),dimnames = NULL)
-
-GVMSRload = (matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
-GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
-
-
-# Create MSR TO OS_field connection matrix
-print("--Filling sparse connection matrix for MSR to OS Field (3d/6)--")
-# Define the matrix
-MSRtoOSLDlist  = c(MSR$MSR,GV$netnr)            # Retrieve the MSR connected to each User and GV
-
-indexlist      = match(MSRlist,MSRtoOSLDlist)   # Search for MSRs in MSR_MSR list
-OSLDwithMSR    = c(MSR$OSLD,GV$OSLD)[indexlist] # Get the OSLD IDs for the corresponding MSRs
-OSLDindexlist  = match(OSLDwithMSR,OSLD)        # Find the OSLD index for each OSLD ID
-NANlist        = is.na(OSLDindexlist)==FALSE    # Remove all NA's (i.e. MSRs which are not matched)
-
-#Create connection matrix
-MSRindex     = 1:length(MSRlist)
-MSRNANindex  = MSRindex[NANlist]
-i            = OSLDindexlist[NANlist]
-j            = MSRNANindex
-v            = matrix(1,length(MSRNANindex),1)
-MSRtoOSLD    = simple_triplet_matrix(i, j, v, nrow = length(OSLD), ncol = max(j),dimnames = NULL)
-
-# Create OS Field TO OS connection matrix
-print("--Filling sparse connection matrix for OS Field to OS (3e/6)--")
-# Define the matrix
-OSLDtoOSlist   = c(MSR$OSLD,GV$OSLD)          # Retrieve the OSLD connected to each User and GV
-
-indexlist      = match(OSLD,OSLDtoOSlist)     # Search for OSLDs in OSLD_MSR list
-OSwithOSLD     = c(MSR$OS,GV$OS)[indexlist]   # Get the OS IDs for the corresponding HLDs
-OSindexlist    = match(OSwithOSLD,OS)         # Find the OS index for each OS ID
-NANlist        = is.na(OSindexlist)==FALSE    # Remove all NA's (i.e. OSLDs which are not matched)
-
-#Create connection matrix
-OSLDindex     = 1:length(OSLD)
-OSLDNANindex  = OSLDindex[NANlist]
-i             = OSindexlist[NANlist]
-j             = OSLDNANindex
-v             = matrix(1,length(OSLDNANindex),1)
-OSLDtoOS      = simple_triplet_matrix(i, j, v, nrow = length(OS), ncol = length(OSLD),dimnames = NULL)
+# Asset to asset
+HLDtoMSR = CreateInterconnectionMatrix(MSR[c("HOOFDLEIDING","MSR")],HLD,MSRlist,TRUE)
+MSRtoOSLD = CreateInterconnectionMatrix(cbind(c(MSR$MSR,GV$netnr),c(MSR$OSLD,GV$OSLD)),MSRlist,OSLD,TRUE)
+OSLDtoOS = CreateInterconnectionMatrix(cbind(c(MSR$OSLD,GV$OSLD),c(MSR$OS,GV$OS)),OSLD,OS,TRUE)
 
 ############## Create other useful interconnection matrices from 'base' interconnection matrices
-print("--Create other required interconnection matrices (3f/6)--")
+print("--Create other required interconnection matrices from 'base' (3b/6)--")
 # Create interconnection matrix from users to MSR
-PC6toMSR  = as.simple_triplet_matrix(matprod_simple_triplet_matrix(HLDtoMSR, PC6toHLD))  
-PC6toOSLD = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, PC6toMSR)) 
-PC6toOS   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, PC6toOSLD)) 
-GVtoOSLD  = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, GVtoMSR)) 
-GV6toOS   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, GVtoOSLD)) 
+# KVEANtoOSLD = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, KVEANtoMSR)) 
+# KVEANtoOS   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, KVEANtoOSLD))
+# PC6toMSR    = as.simple_triplet_matrix(matprod_simple_triplet_matrix(HLDtoMSR, PC6toHLD))  
+# PC6toOSLD   = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, PC6toMSR)) 
+# PC6toOS     = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, PC6toOSLD)) 
+# GVtoOSLD    = as.simple_triplet_matrix(matprod_simple_triplet_matrix(MSRtoOSLD, GVEANtoMSR)) 
+# GVtoOS      = as.simple_triplet_matrix(matprod_simple_triplet_matrix(OSLDtoOS, GVtoOSLD)) 
 # Interconnection back from MSR to HLD. Equals inverse(HLDtoMSR)
 # Because HLDtoMSR is sparse and only has '1' as entry, inverse(HLDtoMSR) = t(HLDtoMSR)
 MSRtoHLD  = t(HLDtoMSR) 
@@ -403,9 +342,19 @@ PVall     = PVallmat[indexlist,]          #Create new matrix
 indexlist = match(PC6,WPKMPC6)            #Find translation table
 WPall     = WPallmat[indexlist,]          #Create new matrix
 
+#EV KVzak
+indexlist  = match(Users$EAN,EVzakKVEAN)         #Find translation table
+EVzakKV    = EVzakKVEANmat[indexlist,]     #Create new matrix
+
+#EV GVzak
+indexlist  = match(GV$EAN,EVzakGVEAN)         #Find translation table
+EVzakGV    = EVzakGVEANmat[indexlist,]     #Create new matrix
+
 #Remove NA's
 PVall[is.na(PVall)]=0
 WPall[is.na(WPall)]=0
+EVzakKV[is.na(EVzakKV)]=0
+EVzakGV[is.na(EVzakGV)]=0
 
 # Clean up variables
 rm(PVallmat,WPallmat,WPKMPC6,PVKMPC6)
@@ -421,11 +370,19 @@ nscenarios       = nyears*nEVscen*nPVscen*nWPscen
 scenarionamelist = c("Low","Med","High","Extr")
 
 ### Initialize matrices which will hold scenario's per PC6 HLD and MSR
-tempScenariosperPC6  = matrix(NA, length(PC6),nprofiles)        
-ScenariosperHLD      = array(NA, c(nHLD,nprofiles,nscenarios))   #matrix of dimension [nrow = nHLD ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
-ScenariosperMSR      = array(NA, c(nMSR,nprofiles,nscenarios))   #matrix of dimension [nrow = nMSR ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
-ScenariosperOSLD     = array(NA, c(nOSLD,nprofiles,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
-scenarionumber       = c()
+tempKVScenariosperPC6  = c()
+tempKVScenariosperEAN  = c()
+tempGVScenariosperEAN  = c()
+KVScenariosperHLD      = array(NA, c(nHLD,4,nscenarios))   #matrix of dimension [nrow = nHLD ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+KVScenariosperMSR      = array(NA, c(nMSR,4,nscenarios))   #matrix of dimension [nrow = nMSR ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+KVScenariosperOSLD     = array(NA, c(nOSLD,4,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+GVScenariosperMSR      = array(NA, c(nMSR,nGVtechprofiles,nscenarios))   #matrix of dimension [nrow = nMSR ,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+GVScenariosperOSLD     = array(NA, c(nOSLD,nGVtechprofiles,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
+scenarionumber         = c()
+
+KVEANindexvect          = 2
+KVPC6indexvect          = c(1,3,4)
+
 
 
 
@@ -433,7 +390,7 @@ scenarionumber       = c()
 ################# WORK IN PROGRESS
 
 #Calculate profiles per MSR
-
+progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 index =1
 ##Create scenario list
 # Create matrices which hold the SJV and number of EV, PV and WP per HLD and MSR
@@ -444,11 +401,22 @@ for (EVii in 1:nEVscen) {
             setTxtProgressBar(progressbar,index)
             # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
             # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
-            tempScenariosperPC6 = cbind(EDSNperPC6,EVpartKV[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
+            
+            # KV Scenarios
+            tempKVScenariosperEAN = cbind(EVzakKV[,yearii+(EVii-1)*nyears])
+            tempKVScenariosperPC6 = cbind(EVpartKV[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
             # Apply matrix multiplication to arrive at matrices per HLD and MSR
-            ScenariosperHLD[,,index] = matprod_simple_triplet_matrix(PC6toHLD,tempScenariosperPC6)
-            ScenariosperMSR[,,index] = matprod_simple_triplet_matrix(PC6toMSR,tempScenariosperPC6)
-            ScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempScenariosperPC6)
+            KVScenariosperHLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toHLD,tempKVScenariosperPC6)
+            KVScenariosperHLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(KVEANtoHLD,tempKVScenariosperEAN)
+            KVScenariosperMSR[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toMSR,tempKVScenariosperPC6)
+            KVScenariosperMSR[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(KVEANtoMSR,tempKVScenariosperEAN)
+            KVScenariosperOSLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempKVScenariosperPC6)
+            KVScenariosperOSLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(KVEANtoOSLD,tempKVScenariosperEAN)
+            
+            # GV Scenarios
+            tempGVScenariosperEAN = cbind(EVzakGV[,yearii+(EVii-1)*nyears])
+            GVScenariosperMSR[,,index] = matprod_simple_triplet_matrix(GVEANtoMSR,tempGVScenariosperEAN)
+            GVScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(GVEANtoOSLD,tempGVScenariosperEAN)
             
             index = index + 1
          } 
@@ -459,18 +427,33 @@ for (EVii in 1:nEVscen) {
 }
 close(progressbar)
 
+# Generate KV baseload
+EDSNperEAN = matrix(0,length(SJV),length(colnames(KVbaseprofile)))
+profilenumber = match(Users$PROFIEL_TYPE,colnames(KVbaseprofile))
+for (i in 1:length(SJV)) {
+  EDSNperEAN[i,profilenumber[i]]=SJV[i]+SJVlow[i]
+}
+EDSNperHLD = t(matprod_simple_triplet_matrix(KVEANtoHLD, EDSNperEAN))
+EDSNperMSR = t(matprod_simple_triplet_matrix(KVEANtoMSR, EDSNperEAN))
+EDSNperOSLD = t(matprod_simple_triplet_matrix(KVEANtoOSLD, EDSNperEAN))
 
+#KVbaseloadperHLD  = matrix(NA,365*24*4,nHLD) #This can be done but not on an 8RAM computer
+KVbaseloadperMSR  = matrix(NA,365*24*4,nMSR)
+KVbaseloadperOSLD = matrix(NA,365*24*4,nOSLD)
 
-#Generate GV load scenarios
-print("--Generate GV scenario list (5c/6) (be patient)--")
+#for (i in 1:nHLD) {KVbaseloadperHLD[,i] = KVbaseprofile %*% EDSNperHLD[,i]} 
+for (i in 1:nMSR) {KVbaseloadperMSR[,i] = KVbaseprofile %*% EDSNperMSR[,i]}
+for (i in 1:nOSLD) {KVbaseloadperOSLD[,i] = KVbaseprofile %*% EDSNperOSLD[,i]}
+
+# Generate GV baseload
+print("--Generate GV baseload (5c/6) (be patient)--")
 KVKnumber = as.numeric(GV$KVKSEGMENT)
 KVKnumber[is.na(KVKnumber)] = 3
 GV_SJV = as.numeric(GV$SJVtot)
 GV_SJV[is.na(GV_SJV)]=0
-GVuse        = (t(GVprofile[,KVKnumber])*GV_SJV*4)
-GVMSRload = (matprod_simple_triplet_matrix(GVtoMSR, (GVuse)))
-GVOSLDload = (matprod_simple_triplet_matrix(GVtoOSLD, (GVuse)))
-
+GVuse        = (t(GVbaseprofile[,KVKnumber])*GV_SJV*4)
+GVbaseloadperMSR = (matprod_simple_triplet_matrix(GVEANtoMSR, (GVuse)))
+GVbaseloadperOSLD = (matprod_simple_triplet_matrix(GVEANtoOSLD, (GVuse)))
 
 ######################################################### Save results
 print("--Saving results (6/6)--")
@@ -482,7 +465,109 @@ print("--Done!--")
 
 
 
-
+# For reference, original network interconnection script
+#
+# # Define the matrix
+# #PC6toLSLD = simple_triplet_zero_matrix(nrow = length(LSLD), ncol = length(PC6))
+# PC6toHLD = simple_triplet_zero_matrix(nrow = length(HLD), ncol = length(PC6))
+# 
+# # Fill the sparse connection matrix (Warning: Complicated code incoming)
+# progressbar = txtProgressBar(min = 0, max = length(PC6), initial = 0, char = "=", style = 3)
+# 
+# tic()
+# # foreach (ii=1:50) %dopar%  { #Unfortunately parallel processing of sparse matrices is 
+# # not trivial. I have to save the results into a list format and then create the sparse matrix... Another time.
+# for (ii in 1:length(PC6){ #I have chosen to do the computations column-wise, because it saves computations
+#    setTxtProgressBar(progressbar,ii)
+#    # Find how many households of each PC6 are in each LSLD
+#    indeces  = Users$ARI_ADRES==PC6[ii];     #Find EANs which are part of current PC
+#    #LSLDs    = Users$LS_KABELS_ID[indeces]  #Retrieve LSLDs of EANs which are part of current PC
+#    #numLSLD  = table(LSLDs)                 #Count how often each LSLD is present
+#    HLDs     = Users$HOOFDLEIDING[indeces]   #Retrieve LSLDs of EANs which are part of current PC
+#    numHLD   = table(HLDs)                   #Count how often each LSLD is present
+#    
+#    # Find out in which indeces to store the results
+#    #LSLDuniq  = unique(LSLDs)               #Find unique LSLDs
+#    #LSLDindex = which(LSLD %in% LSLDuniq)   #Convert LSLDs into indeces
+#    HLDuniq  = unique(HLDs)                  #Find unique LSLDs
+#    HLDindex = which(HLD %in% HLDuniq)       #Convert LSLDs into indeces   
+#    
+#    # Save the resutls
+#    #PC6toLSLD[LSLDindex,ii] = numLSLD/hhPC6[ii]         #Store LSLD count in correct column on correct spot
+#    PC6toHLD[HLDindex,ii] = numHLD/hhPC6[ii]            #Store HLD count in correct column on correct spot
+# }
+# close(progressbar)
+# toc()
+#
+# # Define the matrix
+# HLDtoMSRlist= MSR$HOOFDLEIDING              # Retrieve the HLD cables connected to each User
+# 
+# indexlist    = match(HLD,HLDtoMSRlist)      # Search for HLD_IDs in HLD_MSR list
+# MSRwithHLD   = MSR$MSR[indexlist]            # Get the MSR IDs for the corresponding HLDs
+# MSRindexlist = match(MSRwithHLD,MSRlist)    # Find the MSR index for each MSR ID
+# NANlist      = is.na(MSRindexlist)==FALSE   # Remove all NA's (i.e. HLDs which are not matched)
+# 
+# #Create connection matrix
+# HLDindex     = 1:length(HLD)
+# HLDNANindex  = HLDindex[NANlist]
+# i            = MSRindexlist[NANlist]
+# j            = HLDNANindex
+# v            = matrix(1,length(HLDNANindex),1)
+# HLDtoMSR     = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = max(j),dimnames = NULL)  
+#
+# 
+# # Create GV to MSR connection matrix
+# print("--Filling sparse connection matrix for GV to MSR (3c/6)--")
+# # Define the matrix
+# GVtoMSRlist  = GV$netnr # Retrieve the GVs connected to each MSR
+# 
+# indexlist    = match(GVtoMSRlist,MSRlist)    # Match the MSR IDs
+# # GVuse        = as.numeric(GV$SJVtot)*4*as.numeric(GV$maxfrac2) #Factor 4 is for the conversion from quarters to hours
+# 
+# i = indexlist
+# j = 1:length(GV$netnr)
+# v = matrix(1,length(GV$netnr),1)
+# GVtoMSR = simple_triplet_matrix(i, j, v, nrow = length(MSRlist), ncol = length(GV$netnr),dimnames = NULL)
+# 
+# 
+# # Create MSR TO OS_field connection matrix
+# print("--Filling sparse connection matrix for MSR to OS Field (3d/6)--")
+# # Define the matrix
+# MSRtoOSLDlist  = c(MSR$MSR,GV$netnr)            # Retrieve the MSR connected to each User and GV
+# 
+# indexlist      = match(MSRlist,MSRtoOSLDlist)   # Search for MSRs in MSR_MSR list
+# OSLDwithMSR    = c(MSR$OSLD,GV$OSLD)[indexlist] # Get the OSLD IDs for the corresponding MSRs
+# OSLDindexlist  = match(OSLDwithMSR,OSLD)        # Find the OSLD index for each OSLD ID
+# NANlist        = is.na(OSLDindexlist)==FALSE    # Remove all NA's (i.e. MSRs which are not matched)
+# 
+# #Create connection matrix
+# MSRindex     = 1:length(MSRlist)
+# MSRNANindex  = MSRindex[NANlist]
+# i            = OSLDindexlist[NANlist]
+# j            = MSRNANindex
+# v            = matrix(1,length(MSRNANindex),1)
+# MSRtoOSLD    = simple_triplet_matrix(i, j, v, nrow = length(OSLD), ncol = max(j),dimnames = NULL)
+# 
+# # Create OS Field TO OS connection matrix
+# print("--Filling sparse connection matrix for OS Field to OS (3e/6)--")
+# # Define the matrix
+# OSLDtoOSlist   = c(MSR$OSLD,GV$OSLD)          # Retrieve the OSLD connected to each User and GV
+# 
+# indexlist      = match(OSLD,OSLDtoOSlist)     # Search for OSLDs in OSLD_MSR list
+# OSwithOSLD     = c(MSR$OS,GV$OS)[indexlist]   # Get the OS IDs for the corresponding HLDs
+# OSindexlist    = match(OSwithOSLD,OS)         # Find the OS index for each OS ID
+# NANlist        = is.na(OSindexlist)==FALSE    # Remove all NA's (i.e. OSLDs which are not matched)
+# 
+# #Create connection matrix
+# OSLDindex     = 1:length(OSLD)
+# OSLDNANindex  = OSLDindex[NANlist]
+# i             = OSindexlist[NANlist]
+# j             = OSLDNANindex
+# v             = matrix(1,length(OSLDNANindex),1)
+# OSLDtoOS      = simple_triplet_matrix(i, j, v, nrow = length(OS), ncol = length(OSLD),dimnames = NULL)
+# 
+######################################################################################################
+#
 # For reference, a parrallel processing script per scenario
 # 
 # 

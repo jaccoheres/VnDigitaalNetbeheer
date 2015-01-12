@@ -26,11 +26,8 @@ print("--Calculate memory-intensive GV telemetry users (0/6)--")
 # setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
 # load('SAP_TESLA_NHN.Rda')
 # Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
-
-setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
-
-# load('SAP_TESLA_NHN.Rda')
-# Users  = read.table("MSR_AANSLUITING.csv"                         , sep = ",", dec="," ,colClasses = "character", header = TRUE)
+# 
+# setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
 
 print("--Loading data (1b/6)--")
 # Asset management network data
@@ -95,6 +92,18 @@ WP_low     = read.table("wp laag-2030.csv"                               , sep =
 WP_med     = read.table("wp midden-2030.csv"                             , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 WP_high    = read.table("wp hoog-2030.csv"                               , sep = ";", dec="," ,colClasses = "character", header = TRUE)
 WP_profile = read.table("WP profiel_2Dec_JvdE.csv"                       , sep = ";", dec="," , header = FALSE)
+
+print("--Add OS field and OS information to MSR table (2e/6)--")
+# Add OS and OS field colums to table 'MSR' for future notice
+# We lose 26 MSRs (e.g. 26 MSRs do not have a field and OS defined)
+indexlist = match(MSR$MSR,MSRcap$NUMMER_BEH)
+MSR       = data.frame(MSR,"OSLD"=MSRcap$ROUTENAAM[indexlist],"OS"=MSRcap$OS_NAAM[indexlist])
+MSR$OSLD  = as.character(MSR$OSLD)
+MSR$OS    = as.character(MSR$OS)
+indexlist = match(GV$netnr,MSRcap$NUMMER_BEH)
+GV        = data.frame(GV,"OSLD"=MSRcap$ROUTENAAM[indexlist],"OS"=MSRcap$OS_NAAM[indexlist])
+GV$OSLD   = as.character(GV$OSLD)
+GV$OS     = as.character(GV$OS)
 
 ######################################################### Save results
 print("--Saving results (6/6)--")
