@@ -159,41 +159,26 @@ SJVlow = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK_LAAG)) *4 #SJVlow i
 SJVlow[is.na(SJVlow)] = 0                                              #Remove missing entries
 SJV[is.na(SJV)] = 0                                                    #Remove missing entries
 
-# EDSNperPC6 = data.table(Users$ARI_ADRES,Users$PROFIEL_TYPE,SJV+SJVlow)
-# EDSNperPC6 = group_by(EDSNperPC6, V1,V2)
-# EDSNperPC6 = summarise(EDSNperPC6, SJV = sum(V3))
-# EDSNperPC6 = as.matrix(dcast(EDSNperPC6,V1~V2)[3:12])
-# EDSNperPC6[is.na(EDSNperPC6)]=0
 
-#######BRRRRRroken
-# ## Account for unconnected KV PC6 peak loads
-# SJV2    = as.numeric(sub(",",".",MSRonb$SJV_NORMAAL))                #Yearly electricity use in kWh
-# SJVlow2 = as.numeric(sub(",",".",MSRonb$SJV_LAAG))                          #SJVlow is the SJV during the 'daluren'
-# SJVlow2[is.na(SJVlow2)] = 0                                           #Remove missing entries
-# SJV2[is.na(SJV2)] = 0  
-# 
-# # Convert EDSN profile in peak values for each EAN
-# EDSNindex     = match(MSRonb$PROFIELCATEGORI,EDSNvector) # 12 connections not found
-# profiletype   = basepeak[EDSNindex]
-# 
-# # Calculate base use per PC6 
-# baseload2     = data.table(cbind(base,MSRonb$POSTCOD)) #Calculate peak use
-# baseload$SJV = as.numeric(baseload$V1)
-# basetemp     = baseload[,sum(SJV),by="V2"]                                 #Sum baseloads for each PC6
-# basetemp     = basetemp[with(basetemp, order(V2)), ]                       #Sort results
-# basetemp[is.na(basetemp)] = 0
-# KV_onb_load  = data.matrix(basetemp)[,2]
-# PC6onb       = sort(unique(baseload$V2))
-# 
-# 
-# ###############################MISSING MATCH TO EDSN MAX
-# 
-# #Map the KV_unconnected to the KV PC6
-# indexlist    = match(PC6,PC6onb)           #Find translation table
-# KV_unc_load  = KV_onb_load[indexlist]      #Create new matrix
-# KV_unc_load[is.na(KV_unc_load)] = 0        #Remove NA's (Yet again...)
-# base         = KV_unc_load + base
-############# Broken until here
+
+## Account for unconnected KV PC6 peak loads
+SJV2    = as.numeric(sub(",",".",MSRonb$SJV_NORMAAL))                #Yearly electricity use in kWh
+SJVlow2 = as.numeric(sub(",",".",MSRonb$SJV_LAAG))                          #SJVlow is the SJV during the 'daluren'
+SJVlow2[is.na(SJVlow2)] = 0                                           #Remove missing entries
+SJV2[is.na(SJV2)] = 0  
+SJVKVonb = SJVlow2+SJV2
+PC6onb = MSRonb$POSTCOD
+
+# Convert EDSN profile in peak values for each EAN
+EDSNvector = c('E1A','E1B','E1C','E2A','E2B','E3A','E3B','E3C','E3D','E4A')
+EDSNindex     = match(MSRonb$PROFIELCATEGORI,EDSNvector) # 12 connections not found
+EDSNindex(is.na(EDSNindex)) = 1
+
+#SJVKVonb = SJV of uncoupled KV
+#EDSNindex = EDSN-profile-index
+#PC6onb = PC6 location of EAN
+
+####Save results
 
 
 ############################################################ Create sparse connection matrix
@@ -203,25 +188,25 @@ SJV[is.na(SJV)] = 0                                                    #Remove m
 print("--Create connection matrices (3/6)--")
 
 CreateInterconnectionMatrix <- function(FromTo,FromReferenceList,ToReferenceList,makeUnique) {
-  #INPUT: 
-  #FromTo            = elements which will be coupled (example c(MSR$HOOFDLEIDING,MSR$MSR))
-  #FromReferenceList = unique list of From-elements (example: variable 'HLD')
-  #ToReferenceList   = unique list of To-elements (example: variable 'MSRlist')
-  
-  if(makeUnique) {FromTo = unique(FromTo)}
-  #define indices
-  Fromindexlist = match(FromTo[,1],FromReferenceList)
-  Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the MSR index for each MSR ID
-  NANlist       = is.na(Toindexlist)==FALSE
-  
-  #Create connection matrix
-  i             = Toindexlist[NANlist]
-  j             = Fromindexlist[NANlist]
-  v_weights     = table(Fromindexlist[NANlist])
-  v             = rep(1/v_weights,v_weights)
-  if(makeUnique) {ncols = length(FromReferenceList)} else {ncols = length(FromTo[,1])}
-  Outputmatrix = simple_triplet_matrix(i, j, v, nrow = length(ToReferenceList), ncols, dimnames = NULL) 
-  return(Outputmatrix)
+   #INPUT: 
+   #FromTo            = elements which will be coupled (example c(MSR$HOOFDLEIDING,MSR$MSR))
+   #FromReferenceList = unique list of From-elements (example: variable 'HLD')
+   #ToReferenceList   = unique list of To-elements (example: variable 'MSRlist')
+   
+   if(makeUnique) {FromTo = unique(FromTo)}
+   #define indices
+   Fromindexlist = match(FromTo[,1],FromReferenceList)
+   Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the MSR index for each MSR ID
+   NANlist       = is.na(Toindexlist)==FALSE
+   
+   #Create connection matrix
+   i             = Toindexlist[NANlist]
+   j             = Fromindexlist[NANlist]
+   v_weights     = table(Fromindexlist[NANlist])
+   v             = rep(1/v_weights,v_weights)
+   if(makeUnique) {ncols = length(FromReferenceList)} else {ncols = length(FromTo[,1])}
+   Outputmatrix = simple_triplet_matrix(i, j, v, nrow = length(ToReferenceList), ncols, dimnames = NULL) 
+   return(Outputmatrix)
 }
 
 print("--> Build up connection matrices (3a/6)--")
@@ -243,6 +228,7 @@ PC6toMSR   = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","MSR")],PC6,MSRlist,T
 PC6toOSLD  = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","OSLD")],PC6,OSLD,TRUE)
 PC6toOS    = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","OS")],PC6,OS,TRUE)
 
+
 # Asset to asset
 HLDtoMSR = CreateInterconnectionMatrix(MSR[c("HOOFDLEIDING","MSR")],HLD,MSRlist,TRUE)
 MSRtoOSLD = CreateInterconnectionMatrix(cbind(c(MSR$MSR,GV$netnr),c(MSR$OSLD,GV$OSLD)),MSRlist,OSLD,TRUE)
@@ -251,9 +237,13 @@ OSLDtoOS = CreateInterconnectionMatrix(cbind(c(MSR$OSLD,GV$OSLD),c(MSR$OS,GV$OS)
 ############## Create other useful interconnection matrices from 'base' interconnection matrices
 print("--Create other required interconnection matrices from 'base' (3b/6)--") 
 # Interconnection back from MSR to HLD. Equals inverse(HLDtoMSR)
-# Because HLDtoMSR is sparse and only has '1' as entry, inverse(HLDtoMSR) = t(HLDtoMSR)
-MSRtoHLD  = t(HLDtoMSR) 
-# Comment above also holds for interconnection from OSLD to MSR
+dupl = !duplicated(HLDtoMSR$j)
+j_new = (c(HLDtoMSR$i[dupl],HLDtoMSR$i[!dupl]))
+i_new = 1:length(j_new)
+nMSR = dim(HLDtoMSR)[2]
+MSRtoHLD=simple_triplet_matrix(i_new,j_new,rep(1,length(i_new)),nrow = length(i_new),ncol = nMSR)
+
+# Because OSLDtoMSR is sparse and only has '1' as entry, inverse(OSLDtoMSR) = t(OSLDtoMSR)
 OSLDtoMSR = t(MSRtoOSLD)
 
 ############## Find max capacity for HLD and MSR
@@ -399,11 +389,11 @@ for (EVii in 1:nEVscen) {
             tempKVScenariosperPC6 = cbind(EVpartKV[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
             # Apply matrix multiplication to arrive at matrices per HLD and MSR
             KVScenariosperHLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toHLD,tempKVScenariosperPC6)
-            KVScenariosperHLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(KVEANtoHLD,tempKVScenariosperEAN)
+            KVScenariosperHLD[,KVEANindexvect,index] = matprod_simple_triplet_matrix(KVEANtoHLD,tempKVScenariosperEAN)
             KVScenariosperMSR[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toMSR,tempKVScenariosperPC6)
-            KVScenariosperMSR[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(KVEANtoMSR,tempKVScenariosperEAN)
+            KVScenariosperMSR[,KVEANindexvect,index] = matprod_simple_triplet_matrix(KVEANtoMSR,tempKVScenariosperEAN)
             KVScenariosperOSLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempKVScenariosperPC6)
-            KVScenariosperOSLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(KVEANtoOSLD,tempKVScenariosperEAN)
+            KVScenariosperOSLD[,KVEANindexvect,index] = matprod_simple_triplet_matrix(KVEANtoOSLD,tempKVScenariosperEAN)
             
             # GV Scenarios
             tempGVScenariosperEAN = cbind(EVzakGV[,yearii+(EVii-1)*nyears])
@@ -423,19 +413,19 @@ close(progressbar)
 EDSNperEAN = matrix(0,length(SJV),length(colnames(KVbaseprofile)))
 profilenumber = match(Users$PROFIEL_TYPE,colnames(KVbaseprofile))
 for (i in 1:length(SJV)) {
-  EDSNperEAN[i,profilenumber[i]]=SJV[i]+SJVlow[i]
+   EDSNperEAN[i,profilenumber[i]]=SJV[i]+SJVlow[i]
 }
 EDSNperHLD = t(matprod_simple_triplet_matrix(KVEANtoHLD, EDSNperEAN))
 EDSNperMSR = t(matprod_simple_triplet_matrix(KVEANtoMSR, EDSNperEAN))
 EDSNperOSLD = t(matprod_simple_triplet_matrix(KVEANtoOSLD, EDSNperEAN))
 
-KVbaseloadperHLD  = matrix(NA,365*24*4,nHLD) #This can be done but not on an 8RAM computer
-KVbaseloadperMSR  = matrix(NA,365*24*4,nMSR)
-KVbaseloadperOSLD = matrix(NA,365*24*4,nOSLD)
+KVbaseloadperHLD  = matrix(NA,nHLD,365*24*4) #This can be done but not on an 8RAM computer
+KVbaseloadperMSR  = matrix(NA,nMSR,365*24*4)
+KVbaseloadperOSLD = matrix(NA,nOSLD,365*24*4)
 
-for (i in 1:nHLD) {KVbaseloadperHLD[,i] = KVbaseprofile %*% EDSNperHLD[,i]} 
-for (i in 1:nMSR) {KVbaseloadperMSR[,i] = KVbaseprofile %*% EDSNperMSR[,i]}
-for (i in 1:nOSLD) {KVbaseloadperOSLD[,i] = KVbaseprofile %*% EDSNperOSLD[,i]}
+for (i in 1:nHLD) {KVbaseloadperHLD[i,] = KVbaseprofile %*% EDSNperHLD[,i]} 
+for (i in 1:nMSR) {KVbaseloadperMSR[i,] = KVbaseprofile %*% EDSNperMSR[,i]}
+for (i in 1:nOSLD) {KVbaseloadperOSLD[i,] = KVbaseprofile %*% EDSNperOSLD[,i]}
 
 # Generate GV baseload
 print("--Generate GV baseload (5c/6) (be patient)--")
@@ -444,8 +434,17 @@ KVKnumber[is.na(KVKnumber)] = 3
 GV_SJV = as.numeric(GV$SJVtot)
 GV_SJV[is.na(GV_SJV)]=0
 GVuse        = (t(GVbaseprofile[,KVKnumber])*GV_SJV*4)
-GVbaseloadperMSR = (matprod_simple_triplet_matrix(GVEANtoMSR, (GVuse)))
+GVbaseloadperMSR = (matprod_simple_triplet_matrix(GVEANtoMSR, (GVuse)))  #Possible speed-up
 GVbaseloadperOSLD = (matprod_simple_triplet_matrix(GVEANtoOSLD, (GVuse)))
+
+# Calculate total base load
+gc(verbose=FALSE)
+baseloadperHLD = KVbaseloadperHLD 
+baseloadperMSR = KVbaseloadperMSR + GVbaseloadperMSR
+baseloadperOSLD = KVbaseloadperOSLD + GVbaseloadperOSLD
+
+rm(KVbaseloadperHLD,KVbaseloadperMSR,GVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperOSLD)
+
 
 ######################################################### Save results
 print("--Saving results (6/6)--")
