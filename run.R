@@ -25,11 +25,10 @@
 
 ##Initialize ----------------------------------------------------------------------
 # Remove all data and set working directory
-# rm(list=ls(all=TRUE))
+rm(list=ls(all=TRUE))
 gc(verbose=FALSE)
 path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
 setwd(paste0(path,"/7. Output"))
-nCPUs = 2
 
 print("--Loading packages--")
 # Load packages
@@ -45,7 +44,7 @@ library(utils)
 
 #Load data (To generate this data: run DataPreparation.R)
 print("--Loading data--")
-# load("Connections_NH_v2.RData")
+load("Connections_NH_v2.RData")
 
 print("--Defining functions (1/3)--")
 # Defines function which calculates peak time per MSR
@@ -54,34 +53,46 @@ print("--Defining functions (1/3)--")
 # Note: this function only gives back the time at which this happens. The load itself is calculated
 # later per base, EV, PV and WP
 
-ParPeaktimeCalculationperAsset <- function(iter,nparscenarios,KVbaseloadperAsset,GVbaseloadperAsset,KVScenariosperAsset,AllKVtechprofiles,GVScenariosperAsset,AllGVtechprofiles) {
-   nAssets = dim(KVScenariosperAsset)[1]
-   Outputmatrix = matrix(nrow = nAssets,ncol=2*nparscenarios)
-   setTxtProgressBar(pb, iter)
-   for(ii in 1:nparscenarios) {
-      for(Assetii in 1:nAssets) {
-         Assettotalprofile = KVbaseloadperAsset[Assetii,] + GVbaseloadperAsset[Assetii,] +
-            AllKVtechprofiles %*% KVScenariosperAsset[Assetii,,(ii+(iter*nparscenarios))] +
-            AllGVtechprofiles %*% GVScenariosperAsset[Assetii,,(ii+(iter*nparscenarios))] 
-         Outputmatrix[Assetii,ii]               = which.max(Assettotalprofile)          #peaktime
-         Outputmatrix[Assetii,nparscenarios+ii] = which.min(Assettotalprofile)          #peaktimemin
-      }  
-   }
-   return(Outputmatrix)
+ParPeaktimeCalculationperAsset <- function(iter,nparassets,baseloadperAsset,KVScenariosperAsset,AllKVtechprofiles,GVScenariosperAsset,AllGVtechprofiles) {
+  Outputmatrix = matrix(nrow = nparassets,ncol=2*nscenarios)
+  if(length(dim(GVScenariosperAsset))==2) {GVScenariosperAsset = array(GVScenariosperAsset,c(nparassets,1,nscenarios))}
+  # setTxtProgressBar(pb, iter)
+  for(Assetii in 1:nparassets) { 
+    tempbaseload = baseloadperAsset[Assetii,]
+    for(ii in 1:nscenarios) {
+      Assettotalprofile = tempbaseload  +
+        AllKVtechprofiles %*% KVScenariosperAsset[Assetii,,ii] +
+        AllGVtechprofiles %*% GVScenariosperAsset[Assetii,,ii] 
+      Outputmatrix[Assetii,ii]               = which.max(Assettotalprofile)          #peaktime
+      Outputmatrix[Assetii,nscenarios+ii]    = which.min(Assettotalprofile)          #peaktimemin
+    }  
+  }
+  return(Outputmatrix)
 }
+# iter = 0
+# nparassets = 1+parassetindex[iter+1,2]-parassetindex[iter+1,1]
+# baseloadperAsset = baseloadperMSR[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),]
+# KVScenariosperAsset = KVScenariosperMSR[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),,]
+# GVScenariosperAsset = GVScenariosperMSR[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),,]
 
 FindLoadperAsset <- function(baseloadperAsset,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperAsset,GVScenariosperAsset,peaktimeperAsset) {
-   Assetload                = matrix(NA,length(peaktimeperAsset),4)
-   KVtempAsset              = AllKVtechprofiles[peaktimeperAsset,] * KVScenariosperAsset
-   GVtempAsset              = AllGVtechprofiles[peaktimeperAsset,] * GVScenariosperAsset
-   
-   indexmatrix = matrix(c(peaktimeperAsset,1:nMSR),nMSR,2)
-   Assetload[,baseorder]    = baseloadperAsset[indexmatrix]
-   Assetload[,EVorder]      = rowSums(KVtempAsset[,KVEVindex]) + GVtempAsset
-   Assetload[,PVorder]      = KVtempAsset[,KVPVindex]
-   Assetload[,WPorder]      = KVtempAsset[,KVWPindex] 
-   Assetload = c(Assetload)
-   return(Assetload)
+  nAssets                  = length(peaktimeperAsset)
+  Assetload                = matrix(NA,nAssets,4)
+  KVtempAsset              = AllKVtechprofiles[peaktimeperAsset,] * KVScenariosperAsset
+  
+  if(!is.null(GVScenariosperAsset)) {
+    GVtempAsset = AllGVtechprofiles[peaktimeperAsset,] * GVScenariosperAsset
+  } else {
+    GVtempAsset = rep(0,nAssets)
+  }
+  indexmatrix              = matrix(c(1:nAssets,peaktimeperAsset),nAssets,2)
+  Assetload[,baseorder]    = baseloadperAsset[indexmatrix]
+  Assetload[,EVorder]      = rowSums(KVtempAsset[,KVEVindex]) + GVtempAsset
+  Assetload[,PVorder]      = KVtempAsset[,KVPVindex]
+  Assetload[,WPorder]      = KVtempAsset[,KVWPindex] 
+  Assetload                = c(Assetload)
+  rm(KVtempAsset,GVtempAsset)
+  return(Assetload)
 }
 
 print("--Calculation based on peaktime per MSR (2/3)--")
@@ -97,27 +108,30 @@ OSLDpeaktimemin_MSR  = matrix(nrow = nOSLD, ncol = nscenarios)
 print("--> Calculating peak times in network per MSR (2a/3)--")
 # Function is called using full number of CPUs set in DataPreparation.R
 # Rerun DataPreparation to override, manually set "nCPU" in the context of this script
-nparscenarios = nscenarios/nCPUs       #NEED FIX: Does not work if nscenarios/nCPUs is not an integer
+#nparscenarios = nscenarios/nCPUs       #NEED FIX: Does not work if nscenarios/nCPUs is not an integer
+iter = 0:(nCPUs-1)
+nparassets = nMSR %/% nCPUs
+parassetindex = matrix(NA,nCPUs,2)
+for (i in iter) {parassetindex[i+1,] = cbind((i*nparassets+1),(i+1)*nparassets)}
+parassetindex[nCPUs,2] = parassetindex[nCPUs,2]+ (nMSR %% nCPUs)
 cl<-makeCluster(nCPUs) 
 registerDoSNOW(cl)
 pb = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 tic()
-MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=cbind, .verbose=FALSE) %dopar% {
-   ParPeaktimeCalculationperAsset(iter,nparscenarios,KVbaseloadperMSR,GVbaseloadperMSR,KVScenariosperMSR,AllKVtechprofiles,GVScenariosperMSR,AllGVtechprofiles)
+MSRpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=rbind, .verbose=FALSE) %dopar% {
+  ParPeaktimeCalculationperAsset(iter,1+parassetindex[iter+1,2]-parassetindex[iter+1,1],baseloadperMSR[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),],KVScenariosperMSR[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),,],AllKVtechprofiles,GVScenariosperMSR[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),,],AllGVtechprofiles)
 }
 
 toc()
 stopCluster(cl)
 close(pb)
 
-# test = foreacht(iter,.combine=cbind,.verbose=FALSE)
-
 # Because peaktimes are processed parallelly, we need to re-order the columns.
 # Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
 # Results are re-ordered below and stored in two separate matrices
-indexlist          = rep(c(rep(TRUE,nPVscen*nWPscen*nyears),rep(FALSE,nPVscen*nWPscen*nyears)),nCPUs)
-MSRpeaktime_MSR    = MSRpeaktimetemp[,indexlist]
-MSRpeaktimemin_MSR = MSRpeaktimetemp[,!indexlist]
+# indexlist          = rep(c(rep(TRUE,nparscenarios),rep(FALSE,nparscenarios)),nCPUs)
+# MSRpeaktime_MSR    = MSRpeaktimetemp[,indexlist]
+# MSRpeaktimemin_MSR = MSRpeaktimetemp[,!indexlist]
 rm(MSRpeaktimetemp)
 
 print("--> Cascading peak times per MSR to HLDs (2b/3)--")
@@ -143,18 +157,18 @@ HLDloadmin_MSR    = matrix(nrow = 4*nHLD, ncol = nscenarios)
 progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 tic()
 for(ii in 1:nscenarios) {
-   setTxtProgressBar(progressbar,ii)
-   
-   # For each scenario, we find the load from AllKVprofiles which corresponds with the peak time per MSR 
-   # and multiply this element wise with a vector containing [nEV,nPV,nWP]
-   # This gives a matrix tempMSR with dimension [nMSR * ntechprofiles]
-   
-   #peak load per MSR 
-   MSRload_MSR    = FindLoadperAsset(baseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktime_MSR[,ii])
-   MSRloadmin_MSR = FindLoadperAsset(baseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktimemin_MSR[,ii])
-   #peak load per HLD
-   HLDload_MSR    = FindLoadperAsset(baseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktime_MSR[,ii])   
-   HLDloadmin_MSR = FindLoadperAsset(baseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktimemin_MSR[,ii])      
+  setTxtProgressBar(progressbar,ii)
+  
+  # For each scenario, we find the load from AllKVprofiles which corresponds with the peak time per MSR 
+  # and multiply this element wise with a vector containing [nEV,nPV,nWP]
+  # This gives a matrix tempMSR with dimension [nMSR * ntechprofiles]
+  
+  #peak load per MSR 
+  MSRload_MSR[,ii]    = FindLoadperAsset(baseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktime_MSR[,ii])
+  MSRloadmin_MSR[,ii] = FindLoadperAsset(baseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktimemin_MSR[,ii])
+  #peak load per HLD
+  HLDload_MSR[,ii]    = FindLoadperAsset(baseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],NULL,HLDpeaktime_MSR[,ii])   
+  HLDloadmin_MSR[,ii] = FindLoadperAsset(baseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],NULL,HLDpeaktimemin_MSR[,ii])      
 }
 toc()
 close(progressbar)
@@ -166,35 +180,53 @@ print("--> Calculating loads per OSLD based on peak times per MSR (2d/3)--")
 indexlist_MSR  = rep(c(TRUE,FALSE,FALSE,FALSE),nMSR)
 indexlist_OSLD = rep(c(TRUE,FALSE,FALSE,FALSE),nOSLD)
 for (i in 1:4) {
-   tempMSRload                       = MSRload_MSR[indexlist_MSR,]
-   OSLDload_MSR[indexlist_OSLD,]     = matprod_simple_triplet_matrix(MSRtoOSLD,tempMSRload)
-   tempMSRload                       = MSRloadmin_MSR[indexlist_MSR,]
-   OSLDloadmin_MSR[indexlist_OSLD,]  = matprod_simple_triplet_matrix(MSRtoOSLD,tempMSRload)
-   indexlist_MSR = c(FALSE,indexlist_MSR[-length(indexlist_MSR)])
-   indexlist_OSLD = c(FALSE,indexlist_OSLD[-length(indexlist_OSLD)])
+  tempMSRload                       = MSRload_MSR[indexlist_MSR,]
+  OSLDload_MSR[indexlist_OSLD,]     = matprod_simple_triplet_matrix(MSRtoOSLD,tempMSRload)
+  tempMSRload                       = MSRloadmin_MSR[indexlist_MSR,]
+  OSLDloadmin_MSR[indexlist_OSLD,]  = matprod_simple_triplet_matrix(MSRtoOSLD,tempMSRload)
+  indexlist_MSR = c(FALSE,indexlist_MSR[-length(indexlist_MSR)])
+  indexlist_OSLD = c(FALSE,indexlist_OSLD[-length(indexlist_OSLD)])
 }
 
-print("--Calculating peak timeS in network per OSLD--")
+print("--Calculating peak times in network per OSLD--")
 # Function is called using full number of CPUs set in DataPreparation.R
 # Rerun DataPreparation to override, manually set "nCPU" in the context of this script
-nparscenarios = nscenarios/nCPUs
+# nparscenarios = nscenarios/nCPUs
+# cl<-makeCluster(nCPUs) 
+# registerDoSNOW(cl)
+# pb = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
+# tic()
+# OSLDpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=cbind,.verbose=FALSE) %dopar% {
+#   ParPeaktimeCalculationperAsset(iter,nparscenarios,baseloadperOSLD,KVScenariosperOSLD,AllKVtechprofiles,GVScenariosperOSLD,AllGVtechprofiles)
+# }
+# toc()
+# stopCluster(cl)
+# close(pb)
+
+iter = 0:(nCPUs-1)
+nparassets = nOSLD %/% nCPUs
+parassetindex = matrix(NA,nCPUs,2)
+for (i in iter) {parassetindex[i+1,] = cbind((i*nparassets+1),(i+1)*nparassets)}
+parassetindex[nCPUs,2] = parassetindex[nCPUs,2]+ (nOSLD %% nCPUs)
 cl<-makeCluster(nCPUs) 
 registerDoSNOW(cl)
 pb = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 tic()
-OSLDpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=cbind,.verbose=FALSE) %dopar% {
-   ParPeaktimeCalculationperAsset(iter,nparscenarios,KVbaseloadperOSLD,GVbaseloadperOSLD,KVScenariosperOSLD,AllKVtechprofiles,GVScenariosperOSLD,AllGVtechprofiles)
+OSLDpeaktimetemp = foreach(iter = 0:(nCPUs-1), .packages='slam', .combine=rbind, .verbose=FALSE) %dopar% {
+  ParPeaktimeCalculationperAsset(iter,1+parassetindex[iter+1,2]-parassetindex[iter+1,1],baseloadperOSLD[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),],KVScenariosperOSLD[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),,],AllKVtechprofiles,GVScenariosperOSLD[(parassetindex[iter+1,1]:parassetindex[iter+1,2]),,],AllGVtechprofiles)
 }
+
 toc()
 stopCluster(cl)
 close(pb)
+
 # Because peaktimes are processed parallelly, we need to re-order the columns.
 # Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
 # Results are re-ordered below and stored in two separate matrices
-indexlist = rep(c(rep(TRUE,nPVscen*nWPscen*nyears),rep(FALSE,nPVscen*nWPscen*nyears)),nCPUs)
-OSLDpeaktime_OSLD    = OSLDpeaktimetemp[,indexlist]
-OSLDpeaktimemin_OSLD = OSLDpeaktimetemp[,!indexlist]
-rm(OSLDpeaktimetemp)
+# indexlist = rep(c(rep(TRUE,nparscenarios),rep(FALSE,nparscenarios)),nCPUs)
+# OSLDpeaktime_OSLD    = OSLDpeaktimetemp[,indexlist]
+# OSLDpeaktimemin_OSLD = OSLDpeaktimetemp[,!indexlist]
+# rm(OSLDpeaktimetemp)
 
 # Peak time per MSR and HLD is calculated by using OSLDtoMSR and MSRtoHLD interconnection matrices
 tic()
@@ -221,23 +253,23 @@ HLDloadmin_OSLD  = matrix(nrow = 4*nHLD, ncol = nscenarios)
 progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 tic()
 for(ii in 1:nscenarios) {
-   setTxtProgressBar(progressbar,ii)
-   
-   # For each scenario, we find the load from AllKVprofiles which corresponds with the peak time per MSR 
-   # and multiply this element wise with a vector containing [SJV,nEV,nPV,nWP]
-   # This gives a matrix tempMSR with dimension [nMSR * nprofiles]
-   # in the second step, this matrix is truncated so that different profiles which correspond to the same load
-   # (e.g. 10 EDSN profiles which all correspond to the 'base' load) are summed up into 1 value
-   
-   #peak load per OSLD 
-   OSLDload_OSLD    = FindLoadperAsset(KVbaseloadperOSLD,GVbaseloadperOSLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperOSLD[,,ii],GVScenariosperOSLD[,,ii],OSLDpeaktime_OSLD[,ii])
-   OSLDloadmin_OSLD = FindLoadperAsset(KVbaseloadperOSLD,GVbaseloadperOSLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperOSLD[,,ii],GVScenariosperOSLD[,,ii],OSLDpeaktimemin_OSLD[,ii])
-   #peak load per MSR 
-   MSRload_OSLD     = FindLoadperAsset(KVbaseloadperMSR,GVbaseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktime_OSLD[,ii])
-   MSRloadmin_OSLD  = FindLoadperAsset(KVbaseloadperMSR,GVbaseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktimemin_OSLD[,ii])
-   #peak load per HLD
-   HLDload_OSLD     = FindLoadperAsset(KVbaseloadperHLD,GVbaseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktime_OSLD[,ii])   
-   HLDloadmin_OSLD  = FindLoadperAsset(KVbaseloadperHLD,GVbaseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],GVScenariosperHLD[,,ii],HLDpeaktimemin_OSLD[,ii])     
+  setTxtProgressBar(progressbar,ii)
+  
+  # For each scenario, we find the load from AllKVprofiles which corresponds with the peak time per MSR 
+  # and multiply this element wise with a vector containing [SJV,nEV,nPV,nWP]
+  # This gives a matrix tempMSR with dimension [nMSR * nprofiles]
+  # in the second step, this matrix is truncated so that different profiles which correspond to the same load
+  # (e.g. 10 EDSN profiles which all correspond to the 'base' load) are summed up into 1 value
+  
+  #peak load per OSLD 
+  OSLDload_OSLD[,ii]    = FindLoadperAsset(baseloadperOSLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperOSLD[,,ii],GVScenariosperOSLD[,,ii],OSLDpeaktime_OSLD[,ii])
+  OSLDloadmin_OSLD[,ii] = FindLoadperAsset(baseloadperOSLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperOSLD[,,ii],GVScenariosperOSLD[,,ii],OSLDpeaktimemin_OSLD[,ii])
+  #peak load per MSR 
+  MSRload_OSLD[,ii]     = FindLoadperAsset(baseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktime_OSLD[,ii])
+  MSRloadmin_OSLD[,ii]  = FindLoadperAsset(baseloadperMSR,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperMSR[,,ii],GVScenariosperMSR[,,ii],MSRpeaktimemin_OSLD[,ii])
+  #peak load per HLD
+  HLDload_OSLD[,ii]     = FindLoadperAsset(baseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],NULL,HLDpeaktime_OSLD[,ii])   
+  HLDloadmin_OSLD[,ii]  = FindLoadperAsset(baseloadperHLD,AllKVtechprofiles,AllGVtechprofiles,KVScenariosperHLD[,,ii],NULL,HLDpeaktimemin_OSLD[,ii])     
 }
 toc()
 close(progressbar)

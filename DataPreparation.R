@@ -48,7 +48,7 @@ endyear   = 2030
 nEVscen   = 4
 nPVscen   = 3
 nWPscen   = 3
-nCPUs     = 4
+nCPUs     = 2
 nKVtech   = 3     # number of modeled technologies for KV (EV, PV, WP)
 nGVtech   = 1     # number of modeled technologies for GV (EV)
 # order
@@ -70,20 +70,20 @@ EVzakKVEANmat = cbind(data.matrix(EVzakKV_low)[,2:18],data.matrix(EVzakKV_hydro)
 EVzakGVEANmat = cbind(data.matrix(EVzakGV_low)[,2:18],data.matrix(EVzakGV_hydro)[,2:18],data.matrix(EVzakGV_med)[,2:18],data.matrix(EVzakGV_high)[,2:18])
 # EVparkPC6mat  = cbind(data.matrix(EVpark_low)[,2:18],data.matrix(EVpark_hydro)[,2:18],data.matrix(EVpark_med)[,2:18],data.matrix(EVpark_high)[,2:18])
 # EVtankEANmat  = cbind(data.matrix(EVtank_low)[,2:18],data.matrix(EVtank_hydro)[,2:18],data.matrix(EVtank_med)[,2:18],data.matrix(EVtank_high)[,2:18])
-PVallmat      = cbind(data.matrix(PV_low)[,6:22],data.matrix(PV_med)[,6:22],data.matrix(PV_high)[,6:22])
-WPallmat      = cbind(data.matrix(WP_low)[,2:18],data.matrix(WP_med)[,2:18],data.matrix(WP_high)[,2:18])
+PVallmat      = cbind(data.matrix(PV_low[,6:22]),data.matrix(PV_med[,6:22]),data.matrix(PV_high[,6:22]))
+WPallmat      = cbind(data.matrix(WP_low[,2:18]),data.matrix(WP_med[,2:18]),data.matrix(WP_high[,2:18]))
 
 # Helpful variables related to modeled technologies
-PC4           = data.matrix(EVpartKV_low)[,2]
+PC4           = data.matrix(EVpartKV_low[,2])
 EVzakKVEAN    = EVzakKV_low$EAN
 EVzakGVEAN    = EVzakGV_low$EAN
 WPKMPC6       = WP_low$PC6
 PVKMPC6       = PV_low$PC6
 
 # KV profiles
-KVbaseprofile = data.matrix(EDSN)[,4:dim(data.matrix(EDSN))[2]]
+KVbaseprofile = data.matrix(EDSN[,4:dim(EDSN)[2]])
 KVEVprofile   = data.matrix(cbind(EVpartKV_profile,EVzak_profile))
-KVPVprofile   = data.matrix(PV_profile)
+KVPVprofile   = data.matrix(PV_profile[-35041,6])
 KVWPprofile   = data.matrix(WP_profile)
 AllKVtechprofiles = as.matrix(data.table(KVEVprofile,KVPVprofile,KVWPprofile))
 
@@ -154,31 +154,29 @@ hhPC6   = table(Users$ARI_ADRES)
 ############################################################################# Calculating base loads
 print("--Calculating baseload (2d/6)--")
 ## Calculate the PC6 baseload peaks, SJV values are in kW/quarter hour, so they should be multiplied by four to obtain kWh 
-SJV    = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK))      *4 #Yearly electricity use in kWh
-SJVlow = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK_LAAG)) *4 #SJVlow is the SJV during the 'daluren'
+SJV    = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK))      #*4 #Yearly electricity use in kWh
+SJVlow = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK_LAAG)) #*4 #SJVlow is the SJV during the 'daluren'
 SJVlow[is.na(SJVlow)] = 0                                              #Remove missing entries
 SJV[is.na(SJV)] = 0                                                    #Remove missing entries
 
 
-
-## Account for unconnected KV PC6 peak loads
-SJV2    = as.numeric(sub(",",".",MSRonb$SJV_NORMAAL))                #Yearly electricity use in kWh
-SJVlow2 = as.numeric(sub(",",".",MSRonb$SJV_LAAG))                          #SJVlow is the SJV during the 'daluren'
-SJVlow2[is.na(SJVlow2)] = 0                                           #Remove missing entries
-SJV2[is.na(SJV2)] = 0  
-SJVKVonb = SJVlow2+SJV2
-PC6onb = MSRonb$POSTCOD
-
-# Convert EDSN profile in peak values for each EAN
-EDSNvector = c('E1A','E1B','E1C','E2A','E2B','E3A','E3B','E3C','E3D','E4A')
-EDSNindex     = match(MSRonb$PROFIELCATEGORI,EDSNvector) # 12 connections not found
-EDSNindex(is.na(EDSNindex)) = 1
-
-#SJVKVonb = SJV of uncoupled KV
-#EDSNindex = EDSN-profile-index
-#PC6onb = PC6 location of EAN
-
-####Save results
+# 
+# ## Account for unconnected KV PC6 peak loads
+# SJV2    = as.numeric(sub(",",".",MSRonb$SJV_NORMAAL))                #Yearly electricity use in kWh
+# SJVlow2 = as.numeric(sub(",",".",MSRonb$SJV_LAAG))                          #SJVlow is the SJV during the 'daluren'
+# SJVlow2[is.na(SJVlow2)] = 0                                           #Remove missing entries
+# SJV2[is.na(SJV2)] = 0  
+# SJVKVonb = SJVlow2+SJV2
+# PC6onb = MSRonb$POSTCOD
+# 
+# # Convert EDSN profile in peak values for each EAN
+# EDSNvector = c('E1A','E1B','E1C','E2A','E2B','E3A','E3B','E3C','E3D','E4A')
+# EDSNindex     = match(MSRonb$PROFIELCATEGORI,EDSNvector) # 12 connections not found
+# EDSNindex[is.na(EDSNindex)] = 1
+# 
+# #SJVKVonb = SJV of uncoupled KV
+# #EDSNindex = EDSN-profile-index
+# #PC6onb = PC6 location of EAN
 
 
 ############################################################ Create sparse connection matrix
@@ -188,25 +186,25 @@ EDSNindex(is.na(EDSNindex)) = 1
 print("--Create connection matrices (3/6)--")
 
 CreateInterconnectionMatrix <- function(FromTo,FromReferenceList,ToReferenceList,makeUnique) {
-   #INPUT: 
-   #FromTo            = elements which will be coupled (example c(MSR$HOOFDLEIDING,MSR$MSR))
-   #FromReferenceList = unique list of From-elements (example: variable 'HLD')
-   #ToReferenceList   = unique list of To-elements (example: variable 'MSRlist')
-   
-   if(makeUnique) {FromTo = unique(FromTo)}
-   #define indices
-   Fromindexlist = match(FromTo[,1],FromReferenceList)
-   Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the MSR index for each MSR ID
-   NANlist       = is.na(Toindexlist)==FALSE
-   
-   #Create connection matrix
-   i             = Toindexlist[NANlist]
-   j             = Fromindexlist[NANlist]
-   v_weights     = table(Fromindexlist[NANlist])
-   v             = rep(1/v_weights,v_weights)
-   if(makeUnique) {ncols = length(FromReferenceList)} else {ncols = length(FromTo[,1])}
-   Outputmatrix = simple_triplet_matrix(i, j, v, nrow = length(ToReferenceList), ncols, dimnames = NULL) 
-   return(Outputmatrix)
+  #INPUT: 
+  #FromTo            = elements which will be coupled (example c(MSR$HOOFDLEIDING,MSR$MSR))
+  #FromReferenceList = unique list of From-elements (example: variable 'HLD')
+  #ToReferenceList   = unique list of To-elements (example: variable 'MSRlist')
+  
+  if(makeUnique) {FromTo = unique(FromTo)}
+  #define indices
+  Fromindexlist = match(FromTo[,1],FromReferenceList)
+  Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the MSR index for each MSR ID
+  NANlist       = is.na(Toindexlist)==FALSE
+  
+  #Create connection matrix
+  i             = Toindexlist[NANlist]
+  j             = Fromindexlist[NANlist]
+  v_weights     = table(Fromindexlist[NANlist])
+  v             = rep(1/v_weights,v_weights)
+  if(makeUnique) {ncols = length(FromReferenceList)} else {ncols = length(FromTo[,1])}
+  Outputmatrix = simple_triplet_matrix(i, j, v, nrow = length(ToReferenceList), ncols, dimnames = NULL) 
+  return(Outputmatrix)
 }
 
 print("--> Build up connection matrices (3a/6)--")
@@ -228,7 +226,6 @@ PC6toMSR   = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","MSR")],PC6,MSRlist,T
 PC6toOSLD  = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","OSLD")],PC6,OSLD,TRUE)
 PC6toOS    = CreateInterconnectionMatrix(MSR[c("ARI_ADRES","OS")],PC6,OS,TRUE)
 
-
 # Asset to asset
 HLDtoMSR = CreateInterconnectionMatrix(MSR[c("HOOFDLEIDING","MSR")],HLD,MSRlist,TRUE)
 MSRtoOSLD = CreateInterconnectionMatrix(cbind(c(MSR$MSR,GV$netnr),c(MSR$OSLD,GV$OSLD)),MSRlist,OSLD,TRUE)
@@ -237,11 +234,17 @@ OSLDtoOS = CreateInterconnectionMatrix(cbind(c(MSR$OSLD,GV$OSLD),c(MSR$OS,GV$OS)
 ############## Create other useful interconnection matrices from 'base' interconnection matrices
 print("--Create other required interconnection matrices from 'base' (3b/6)--") 
 # Interconnection back from MSR to HLD. Equals inverse(HLDtoMSR)
+# dupl = !duplicated(HLDtoMSR$j)
+# j_new = (c(HLDtoMSR$i[dupl],HLDtoMSR$i[!dupl]))
+# i_new = 1:length(j_new)
+# nMSR = dim(HLDtoMSR)[1]
+# MSRtoHLD=simple_triplet_matrix(i_new,j_new,rep(1,length(i_new)),nrow = length(i_new),ncol = nMSR)
 dupl = !duplicated(HLDtoMSR$j)
-j_new = (c(HLDtoMSR$i[dupl],HLDtoMSR$i[!dupl]))
+j_new = HLDtoMSR$i[dupl]
 i_new = 1:length(j_new)
-nMSR = dim(HLDtoMSR)[2]
+nMSR = dim(HLDtoMSR)[1]
 MSRtoHLD=simple_triplet_matrix(i_new,j_new,rep(1,length(i_new)),nrow = length(i_new),ncol = nMSR)
+
 
 # Because OSLDtoMSR is sparse and only has '1' as entry, inverse(OSLDtoMSR) = t(OSLDtoMSR)
 OSLDtoMSR = t(MSRtoOSLD)
@@ -260,7 +263,7 @@ Imax[is.na(Imax)] = 0
 
 dfLSLDmax = data.frame(HOOFDLEIDING = HLDcap$HOOFDLEIDING,        # Create data frame for matching and summarizing.
                        LENGTE       = HLDcap$SYSTEEM_LENGTE,
-                       capaciteit   = 0.4*Imax*(1/sqrt(3)))   
+                       capaciteit   = 0.4*Imax*sqrt(3))   
 dfHLDmax  = ddply(dfLSLDmax, .(HOOFDLEIDING), summarise,          # Find maximum capacity and total cable length
                   MaxCap = max(capaciteit),                       # per LS_HLD
                   length = sum(LENGTE))                                                                                            
@@ -312,13 +315,17 @@ EVpartKV    = EV_per_hh_PC4[indexlist,] * hhPC6matrix      #Generate EV per hh o
 EVpartKV[is.na(EVpartKV)]=0                                      #Remove NA's caused by missing KM data for certain PC's
 
 # Clean up variables
-rm(EVallPC4mat,AMEVPC4,EV_per_hh_PC4)
+rm(EVpartKVPC4mat,AMEVPC4,EV_per_hh_PC4)
 
 ######################################################### Match K&M PC6 to AM
 print("--Converting K&M PC6 scenarios to AM PC6 and clean up (5a/6)--")
-# PV
+# PV (also multiply with average SJV per PC6 to determine expected installation size)
 indexlist = match(PC6,PVKMPC6)            #Find translation table
 PVall     = PVallmat[indexlist,]          #Create new matrix
+SJVperPC6 = matprod_simple_triplet_matrix(KVEANtoPC6,(SJV+SJVlow))
+hhperPC6  = matprod_simple_triplet_matrix(KVEANtoPC6,rep(1,length(SJV)))
+AverageSJVperPC6 = as.numeric(SJVperPC6/hhperPC6)
+PVall     = t(t(PVall) * AverageSJVperPC6)
 
 # WP
 indexlist = match(PC6,WPKMPC6)            #Find translation table
@@ -362,58 +369,51 @@ GVScenariosperMSR      = array(NA, c(nMSR,nGVtechprofiles,nscenarios))   #matrix
 GVScenariosperOSLD     = array(NA, c(nOSLD,nGVtechprofiles,nscenarios))  #matrix of dimension [nrow = nOSLD,ncol = nprofiles,narray = nEV*nPV*nWP*nyears]
 scenarionumber         = c()
 
-KVEANindexvect          = 2
-KVPC6indexvect          = c(1,3,4)
-
-
-
-
-
-################# WORK IN PROGRESS
-
 #Calculate profiles per MSR
 progressbar = txtProgressBar(min = 0, max = nscenarios, initial = 0, char = "=", style = 3)
 index =1
 ##Create scenario list
 # Create matrices which hold the SJV and number of EV, PV and WP per HLD and MSR
 for (EVii in 1:nEVscen) {
-   for(PVii in 1:nPVscen) {
-      for(WPii in 1:nWPscen) {     
-         for(yearii in 1:nyears) {
-            setTxtProgressBar(progressbar,index)
-            # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
-            # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
-            
-            # KV Scenarios
-            tempKVScenariosperEAN = cbind(EVzakKV[,yearii+(EVii-1)*nyears])
-            tempKVScenariosperPC6 = cbind(EVpartKV[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
-            # Apply matrix multiplication to arrive at matrices per HLD and MSR
-            KVScenariosperHLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toHLD,tempKVScenariosperPC6)
-            KVScenariosperHLD[,KVEANindexvect,index] = matprod_simple_triplet_matrix(KVEANtoHLD,tempKVScenariosperEAN)
-            KVScenariosperMSR[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toMSR,tempKVScenariosperPC6)
-            KVScenariosperMSR[,KVEANindexvect,index] = matprod_simple_triplet_matrix(KVEANtoMSR,tempKVScenariosperEAN)
-            KVScenariosperOSLD[,KVPC6indexvect,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempKVScenariosperPC6)
-            KVScenariosperOSLD[,KVEANindexvect,index] = matprod_simple_triplet_matrix(KVEANtoOSLD,tempKVScenariosperEAN)
-            
-            # GV Scenarios
-            tempGVScenariosperEAN = cbind(EVzakGV[,yearii+(EVii-1)*nyears])
-            GVScenariosperMSR[,,index] = matprod_simple_triplet_matrix(GVEANtoMSR,tempGVScenariosperEAN)
-            GVScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(GVEANtoOSLD,tempGVScenariosperEAN)
-            
-            index = index + 1
-         } 
-         #Scenarionumber: indexnumber, PV scenario, EV scenario, WP scenario, 
-         scenarionumber = rbind(scenarionumber,c((index-1)/nyears,EVii,PVii,WPii))      
-      }
-   }
+  for(PVii in 1:nPVscen) {
+    for(WPii in 1:nWPscen) {     
+      for(yearii in 1:nyears) {
+        setTxtProgressBar(progressbar,index)
+        # For a single EV, PV, WP scenario and a single year, create a matrix which has for each PC6
+        # the total SJV per EDSN category, and the number of EV, PV and WP in that PC6
+        
+        # KV Scenarios
+        tempKVScenariosperEAN = cbind(EVzakKV[,yearii+(EVii-1)*nyears])
+        tempKVScenariosperPC6 = cbind(EVpartKV[,yearii+(EVii-1)*nyears],PVall[,yearii+(PVii-1)*nyears],WPall[,yearii+(WPii-1)*nyears])
+        # Apply matrix multiplication to arrive at matrices per HLD and MSR
+        KVScenariosperHLD[,KVPC6index,index] = matprod_simple_triplet_matrix(PC6toHLD,tempKVScenariosperPC6)
+        KVScenariosperHLD[,KVEANindex,index] = matprod_simple_triplet_matrix(KVEANtoHLD,tempKVScenariosperEAN)
+        KVScenariosperMSR[,KVPC6index,index] = matprod_simple_triplet_matrix(PC6toMSR,tempKVScenariosperPC6)
+        KVScenariosperMSR[,KVEANindex,index] = matprod_simple_triplet_matrix(KVEANtoMSR,tempKVScenariosperEAN)
+        KVScenariosperOSLD[,KVPC6index,index] = matprod_simple_triplet_matrix(PC6toOSLD,tempKVScenariosperPC6)
+        KVScenariosperOSLD[,KVEANindex,index] = matprod_simple_triplet_matrix(KVEANtoOSLD,tempKVScenariosperEAN)
+        
+        # GV Scenarios
+        tempGVScenariosperEAN = cbind(EVzakGV[,yearii+(EVii-1)*nyears])
+        GVScenariosperMSR[,,index] = matprod_simple_triplet_matrix(GVEANtoMSR,tempGVScenariosperEAN)
+        GVScenariosperOSLD[,,index] = matprod_simple_triplet_matrix(GVEANtoOSLD,tempGVScenariosperEAN)
+        
+        index = index + 1
+      } 
+      #Scenarionumber: indexnumber, PV scenario, EV scenario, WP scenario, 
+      scenarionumber = rbind(scenarionumber,c((index-1)/nyears,EVii,PVii,WPii))      
+    }
+  }
 }
 close(progressbar)
+
+rm(tempKVScenariosperEAN,tempKVScenariosperPC6,tempGVScenariosperEAN)
 
 # Generate KV baseload
 EDSNperEAN = matrix(0,length(SJV),length(colnames(KVbaseprofile)))
 profilenumber = match(Users$PROFIEL_TYPE,colnames(KVbaseprofile))
 for (i in 1:length(SJV)) {
-   EDSNperEAN[i,profilenumber[i]]=SJV[i]+SJVlow[i]
+  EDSNperEAN[i,profilenumber[i]]=SJV[i]+SJVlow[i]
 }
 EDSNperHLD = t(matprod_simple_triplet_matrix(KVEANtoHLD, EDSNperEAN))
 EDSNperMSR = t(matprod_simple_triplet_matrix(KVEANtoMSR, EDSNperEAN))
@@ -443,8 +443,9 @@ baseloadperHLD = KVbaseloadperHLD
 baseloadperMSR = KVbaseloadperMSR + GVbaseloadperMSR
 baseloadperOSLD = KVbaseloadperOSLD + GVbaseloadperOSLD
 
-rm(KVbaseloadperHLD,KVbaseloadperMSR,GVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperOSLD)
-
+rm(KVbaseloadperHLD,KVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperMSR,GVbaseloadperOSLD)
+rm(Users,MSR,EDSN,EDSNperEAN,EDSNperHLD,EDSNperMSR,EDSNperOSLD,EVpartKV,EVpartKVPC4mat,EVzakGV,EVzakGVEANmat,EVzakKV,EVzakKVEANmat,GV,GVtemp,GVuse,HLDcap,HLDspec,MSRcap,MSRonb,PV_high,PV_low,PV_med,PVall,WP_high,WP_low,WP_med,WP_profile,WPall,dfHLDmax,hhPC4matrix,hhPC6matrix)
+gc()
 
 ######################################################### Save results
 print("--Saving results (6/6)--")

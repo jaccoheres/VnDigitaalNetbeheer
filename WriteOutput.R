@@ -63,9 +63,9 @@ for (i in 1:nFinscen) {
   scenariocountMSR = append(scenariocountMSR,rep(i,nMSR))
   scenariocountHLD = append(scenariocountHLD,rep(i,nHLD))
   index_start      = 1 + nyears * (
-                     ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
-                     ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
-                     ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
+    ((Finscen[i,1]-1)*(dim(scenarionumber)[1]/(nEVscen)))+
+      ((Finscen[i,2]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen)))+
+      ((Finscen[i,3]-1)*(dim(scenarionumber)[1]/(nEVscen*nPVscen*nWPscen))))
   index_end        = index_start + nyears - 1
   Fin_index        = cbind(Fin_index, seq(index_start,index_end))
 }
@@ -130,10 +130,10 @@ for (i in c("-","+")) {
   }
 }
 names = c("","scenarionummer","net","type","NR_Behuizing","Lengte","scenarioaanduiding",
-           "","","","",
-           "Nominaal vermogen",
-           "","","","","","",
-           names)
+          "","","","",
+          "Nominaal vermogen",
+          "","","","","","",
+          names)
 setnames(dt,names)
 
 filename = paste0("Fin-output NHN_",Sys.Date(),".csv")
@@ -148,21 +148,23 @@ indexlist         = match(MSRlist,Vnames$NR_Behuizing_NRG)                 # Can
 Visionlist        = Vnames$ID_Vision[indexlist]                            # Sort the list of MSR's in the Vision order
 NAlist            = is.na(Visionlist)==FALSE                               # Create a list of MSR that have not been found
 exportnamelist    = Visionlist[NAlist]                                     # Only use the found MSR for the export         
+NAlist            = rep(NAlist,4)
 MSRexport         = MSRload_OSLD[NAlist,]
 MSRexportmin      = MSRloadmin_OSLD[NAlist,]
-MSRmaxexport      = MSRmax[NAlist]
-nMSRexport        = length(exportnamelist)
-indexlist         = c(seq(1,nMSRexport*4*nscenarios,by=4),seq(2,nMSRexport*4*nscenarios,by=4),seq(3,nMSRexport*4*nscenarios,by=4),seq(4,nMSRexport*4*nscenarios,by=4))
+nMSRexport        = dim(MSRexport)[1]
+#indexlist         = c(seq(1,nMSRexport*nscenarios,by=4),seq(2,nMSRexport*nscenarios,by=4),seq(3,nMSRexport*nscenarios,by=4),seq(4,nMSRexport*nscenarios,by=4))
 years             = seq(startyear,endyear)
 datelist          = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(1,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
-datelistmin       = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(2,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
+datelistmin       = c(paste(rep_len(paste(years-2000,rep_len("-",nyears),rep.int(3,nyears),rep_len("-",nyears)),nscenarios),floor(seq.int(2001,2001+nscenarios/nyears,1/nyears))[1:nscenarios]))
 timelist          = rep.int(9,nscenarios)
-exportbaseload    = matrix(t(MSRexport)[indexlist],nscenarios,(nMSRexport*4))     # Reshape results for saving in Vision format
-exportbaseloadmin = matrix(t(MSRexportmin)[indexlist],nscenarios,(nMSRexport*4))  # Reshape results for saving in Vision format
+exportbaseload    = matrix(t(MSRexport),nscenarios,(nMSRexport))     # Reshape results for saving in Vision format
+exportbaseloadmin = matrix(t(MSRexportmin),nscenarios,(nMSRexport))  # Reshape results for saving in Vision format
+exportbaseload[is.na(exportbaseload)] = 0
+exportbaseloadmin[is.na(exportbaseloadmin)] = 0
 
 print("--> Casting output to data tables for csv write (3b/3)--")
 #Set VISION output files and column names
-exportname = c('Datum','Tijd',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.WP',sep='')) #Setup the specific Vision names
+exportname = c('Datum','Tijd',paste(exportnamelist,'.Bel1',sep=''),paste(exportnamelist,'.EV',sep=''),paste(exportnamelist,'.PV',sep=''),paste(exportnamelist,'.WP',sep='')) #Setup the specific Vision names
 dt = data.table(datelist,timelist,exportbaseload)           #Convert exportmatrix to datatable because R is not capable enough to save matrices
 dtmin = data.table(datelistmin,timelist,exportbaseloadmin)  #Convert exportmatrix to datatable because R is not capable enough to save matrices
 setnames(dt,exportname)                                     #Set the column names
@@ -183,7 +185,7 @@ for (ii in scenarioindex) {
   EVii = scenarionumber[ii,2]  
   PVii = scenarionumber[ii,3] 
   WPii = scenarionumber[ii,4] 
-           
+  
   # Then print results for maxload scenario
   dtprint = dt[(1+(ii-1)*nyears):(ii*nyears),]
   name = paste0(ii,"a_MSRloadvision_EV",scenarionamelist[EVii],"_PV",scenarionamelist[PVii],"_WP",scenarionamelist[WPii],"_maxload",".csv")
