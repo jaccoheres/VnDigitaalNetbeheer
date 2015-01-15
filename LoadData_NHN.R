@@ -13,7 +13,8 @@ gc(verbose=FALSE)
 # No packages required
 
 #set path
-path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
 
 ################################################################################ Load data 
 print("--Calculate memory-intensive GV telemetry users (0/6)--")
@@ -45,8 +46,11 @@ HLDspec = read.table("Match kabeltypes NHN.csv"                          , sep =
 Vnames  = read.table("Vertaaltabel Vision_ID naar NRG_Nr_Behuizing.csv"  , sep = ";", dec=",", colClasses="character", header = TRUE)
 
 setwd(paste0(path,"/2. Baseload GV"))
-GV            = read.table("GVBaseloadsaanstations.csv"                  , sep = ",", dec=",", colClasses="character", header = TRUE)
-GVprofiletext = read.table("profielenGV.csv"                             , sep = ",", dec="." , as.is=2,header = TRUE)
+GV              = read.table("GVBaseloadsaanstations.csv"                  , sep = ",", dec=",", colClasses="character", header = TRUE)
+GVprofiletext   = read.table("profielenGV.csv"                             , sep = ",", dec="." , as.is=2,header = TRUE)
+setwd(paste0(path,"/2. Baseload GV/2. SAP TESLA"))
+load("SAP_TESLA_NHN_proc.Rda")
+GVprofiletelmet = saptesla_export
 
 # Klant & Markt scenario's
 setwd(paste0(path,"/5. K&M input/EV KV"))
@@ -112,6 +116,7 @@ GV$OS     = as.character(GV$OS)
 
 ######################################################### Save results
 print("--Saving results (6/6)--")
+rm(saptesla_export)
 setwd(paste0(path,"/7. Output"))
 
 # Save necessary data

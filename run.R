@@ -27,7 +27,8 @@
 # Remove all data and set working directory
 rm(list=ls(all=TRUE))
 gc(verbose=FALSE)
-path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
 setwd(paste0(path,"/7. Output"))
 
 print("--Loading packages--")
@@ -37,15 +38,16 @@ library(plyr)
 library(data.table)
 library(slam)       #Used for sparse matrices
 library(tictoc)     #Because I am a Matlab person
-library(xlsx)
+# library(xlsx)
 library(ggplot2)
 library(doSNOW)
 library(utils)
 
+
 #Load data (To generate this data: run DataPreparation.R)
 print("--Loading data--")
 load("Connections_NH_v2.RData")
-
+nCPUs = 8
 print("--Defining functions (1/3)--")
 # Defines function which calculates peak time per MSR
 # Function calculates the total year-profile per MSR per scenario per year, and 
@@ -81,10 +83,12 @@ FindLoadperAsset <- function(baseloadperAsset,AllKVtechprofiles,AllGVtechprofile
   KVtempAsset              = AllKVtechprofiles[peaktimeperAsset,] * KVScenariosperAsset
   
   if(!is.null(GVScenariosperAsset)) {
+    if(is.null(dim(GVScenariosperAsset))) {GVScenariosperAsset = matrix(GVScenariosperAsset,nAssets,1)}
     GVtempAsset = AllGVtechprofiles[peaktimeperAsset,] * GVScenariosperAsset
   } else {
     GVtempAsset = rep(0,nAssets)
   }
+  
   indexmatrix              = matrix(c(1:nAssets,peaktimeperAsset),nAssets,2)
   Assetload[,baseorder]    = baseloadperAsset[indexmatrix]
   Assetload[,EVorder]      = rowSums(KVtempAsset[,KVEVindex]) + GVtempAsset
@@ -129,9 +133,9 @@ close(pb)
 # Because peaktimes are processed parallelly, we need to re-order the columns.
 # Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
 # Results are re-ordered below and stored in two separate matrices
-# indexlist          = rep(c(rep(TRUE,nparscenarios),rep(FALSE,nparscenarios)),nCPUs)
-# MSRpeaktime_MSR    = MSRpeaktimetemp[,indexlist]
-# MSRpeaktimemin_MSR = MSRpeaktimetemp[,!indexlist]
+indexlist          = c(rep(TRUE,nscenarios),rep(FALSE,nscenarios))
+MSRpeaktime_MSR    = MSRpeaktimetemp[,indexlist]
+MSRpeaktimemin_MSR = MSRpeaktimetemp[,!indexlist]
 rm(MSRpeaktimetemp)
 
 print("--> Cascading peak times per MSR to HLDs (2b/3)--")
@@ -223,10 +227,10 @@ close(pb)
 # Because peaktimes are processed parallelly, we need to re-order the columns.
 # Results are returned as [i1_Peaktime,i1_Peaktimemin,i2_peaktime,i2_peaktimemin,...]
 # Results are re-ordered below and stored in two separate matrices
-# indexlist = rep(c(rep(TRUE,nparscenarios),rep(FALSE,nparscenarios)),nCPUs)
-# OSLDpeaktime_OSLD    = OSLDpeaktimetemp[,indexlist]
-# OSLDpeaktimemin_OSLD = OSLDpeaktimetemp[,!indexlist]
-# rm(OSLDpeaktimetemp)
+indexlist = c(rep(TRUE,nscenarios),rep(FALSE,nscenarios))
+OSLDpeaktime_OSLD    = OSLDpeaktimetemp[,indexlist]
+OSLDpeaktimemin_OSLD = OSLDpeaktimetemp[,!indexlist]
+rm(OSLDpeaktimetemp)
 
 # Peak time per MSR and HLD is calculated by using OSLDtoMSR and MSRtoHLD interconnection matrices
 tic()

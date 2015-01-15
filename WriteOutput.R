@@ -16,7 +16,8 @@
 # Remove all data and set working directory
 rm(list=ls(all=TRUE))
 gc(verbose=FALSE)
-path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
 setwd(paste0(path,"/7. Output"))
 
 print("--Loading packages--")

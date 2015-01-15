@@ -38,7 +38,8 @@ library(ff)
 library(utils)
 
 #set path
-path = "C:/1. Programmeerwerk/Bottum Up Analyse/2. Data"
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
 
 ################################################################################ Initialise variables and load data 
 
@@ -154,8 +155,8 @@ hhPC6   = table(Users$ARI_ADRES)
 ############################################################################# Calculating base loads
 print("--Calculating baseload (2d/6)--")
 ## Calculate the PC6 baseload peaks, SJV values are in kW/quarter hour, so they should be multiplied by four to obtain kWh 
-SJV    = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK))      #*4 #Yearly electricity use in kWh
-SJVlow = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK_LAAG)) #*4 #SJVlow is the SJV during the 'daluren'
+SJV    = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK))         #Yearly electricity use in kWh
+SJVlow = as.numeric(sub(",",".",Users$STANDAARD_JAARVERBRUIK_LAAG))    #SJVlow is the SJV during the 'daluren'
 SJVlow[is.na(SJVlow)] = 0                                              #Remove missing entries
 SJV[is.na(SJV)] = 0                                                    #Remove missing entries
 
@@ -410,40 +411,55 @@ close(progressbar)
 rm(tempKVScenariosperEAN,tempKVScenariosperPC6,tempGVScenariosperEAN)
 
 # Generate KV baseload
-EDSNperEAN = matrix(0,length(SJV),length(colnames(KVbaseprofile)))
-profilenumber = match(Users$PROFIEL_TYPE,colnames(KVbaseprofile))
+print("--Generate KV baseload (5c/6)--")
+EDSNperEAN = matrix(0,length(SJV),length(colnames(KVbaseprofile)))           # matrix with nrow = EAN and ncol = nEDSNprofiles
+profilenumber = match(Users$PROFIEL_TYPE,colnames(KVbaseprofile))            # indexvector to store the correct profiles in the correct places
 for (i in 1:length(SJV)) {
-  EDSNperEAN[i,profilenumber[i]]=SJV[i]+SJVlow[i]
+  EDSNperEAN[i,profilenumber[i]]=(SJV[i]+SJVlow[i])*4                        # fill matrix with per EDSNperEAN[EAN,profile] = SJV (* 4 to convert kWh to kW)
 }
-EDSNperHLD = t(matprod_simple_triplet_matrix(KVEANtoHLD, EDSNperEAN))
-EDSNperMSR = t(matprod_simple_triplet_matrix(KVEANtoMSR, EDSNperEAN))
-EDSNperOSLD = t(matprod_simple_triplet_matrix(KVEANtoOSLD, EDSNperEAN))
+EDSNperHLD = t(matprod_simple_triplet_matrix(KVEANtoHLD, EDSNperEAN))        # matrix with nrow = nHLD, ncol = nEDSNprofiles
+EDSNperMSR = t(matprod_simple_triplet_matrix(KVEANtoMSR, EDSNperEAN))        # matrix with nrow = nMSR, ncol = nEDSNprofiles
+EDSNperOSLD = t(matprod_simple_triplet_matrix(KVEANtoOSLD, EDSNperEAN))      # matrix with nrow = nOSLD, ncol = nEDSNprofiles
 
 KVbaseloadperHLD  = matrix(NA,nHLD,365*24*4) #This can be done but not on an 8RAM computer
 KVbaseloadperMSR  = matrix(NA,nMSR,365*24*4)
 KVbaseloadperOSLD = matrix(NA,nOSLD,365*24*4)
 
-for (i in 1:nHLD) {KVbaseloadperHLD[i,] = KVbaseprofile %*% EDSNperHLD[,i]} 
+for (i in 1:nHLD) {KVbaseloadperHLD[i,] = KVbaseprofile %*% EDSNperHLD[,i]}    #matrix multiplication, output = nrow = nHLD, ncol = 1
 for (i in 1:nMSR) {KVbaseloadperMSR[i,] = KVbaseprofile %*% EDSNperMSR[,i]}
 for (i in 1:nOSLD) {KVbaseloadperOSLD[i,] = KVbaseprofile %*% EDSNperOSLD[,i]}
 
 # Generate GV baseload
-print("--Generate GV baseload (5c/6) (be patient)--")
-KVKnumber = as.numeric(GV$KVKSEGMENT)
-KVKnumber[is.na(KVKnumber)] = 3
-GV_SJV = as.numeric(GV$SJVtot)
+print("--Generate GV baseload (5d/6)--")
+# find profile number and SJV for EANs for which we do not have telmet data
+nGV = length(GV$EAN)
+notelmet = is.na(match(GV$EAN,GVprofiletelmet$AANSLUITING_EAN))         # 1649 do not have telmet, 2381 do
+KVKnumber = as.numeric(GV$KVKSEGMENT[notelmet])                         # GVs which do not have telmet data get an average profile based on their KVK segment
+KVKnumber[is.na(KVKnumber)] = 3                                         # for those who do not have a KVK segment, we assume segment 3 (equals standard EDSN E3A profile)
+GV_SJV = as.numeric(GV$SJVtot[notelmet])
 GV_SJV[is.na(GV_SJV)]=0
-GVuse        = (t(GVbaseprofile[,KVKnumber])*GV_SJV*4)
-GVbaseloadperMSR = (matprod_simple_triplet_matrix(GVEANtoMSR, (GVuse)))  #Possible speed-up
+
+# create index vector for EANs for which we have telmet data
+telmet = !notelmet
+indextelmet = match(GV$EAN[telmet],GVprofiletelmet$AANSLUITING_EAN)
+indexGV = seq(1,nGV)[telmet]
+GVprofiletelmet = data.matrix(-GVprofiletelmet[,-1])
+
+# create matrix
+GVuse             = matrix(NA,nGV,365*24*4)
+GVuse[notelmet,]   = (t(GVbaseprofile[,KVKnumber])*GV_SJV*4)            # output is matrix filled with NA for GV with telmet and year values for those without telmet
+GVuse[telmet,]     = GVprofiletelmet[indextelmet,]                      # now add telmet data
+GVbaseloadperMSR  = (matprod_simple_triplet_matrix(GVEANtoMSR, (GVuse)))  
 GVbaseloadperOSLD = (matprod_simple_triplet_matrix(GVEANtoOSLD, (GVuse)))
 
 # Calculate total base load
+print("--Calculate total baseload (5e/6)--")
 gc(verbose=FALSE)
 baseloadperHLD = KVbaseloadperHLD 
 baseloadperMSR = KVbaseloadperMSR + GVbaseloadperMSR
 baseloadperOSLD = KVbaseloadperOSLD + GVbaseloadperOSLD
 
-rm(KVbaseloadperHLD,KVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperMSR,GVbaseloadperOSLD)
+rm(KVbaseloadperHLD,KVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperMSR,GVbaseloadperOSLD,GVuse)
 rm(Users,MSR,EDSN,EDSNperEAN,EDSNperHLD,EDSNperMSR,EDSNperOSLD,EVpartKV,EVpartKVPC4mat,EVzakGV,EVzakGVEANmat,EVzakKV,EVzakKVEANmat,GV,GVtemp,GVuse,HLDcap,HLDspec,MSRcap,MSRonb,PV_high,PV_low,PV_med,PVall,WP_high,WP_low,WP_med,WP_profile,WPall,dfHLDmax,hhPC4matrix,hhPC6matrix)
 gc()
 
