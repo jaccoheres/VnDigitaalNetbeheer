@@ -34,6 +34,9 @@ library(gmodels)
 #Load data (To generate this data: run Run.R)
 print("--Loading data (1/3)--")
 load("CalculationOutput_NH_v2.RData")
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
+setwd(paste0(path,"/7. Output"))
 
 # Export to Finance output ----------------------------------------------------------------------------------
 print("--Write export for finance (2/3)--")
@@ -175,7 +178,7 @@ setnames(dt2,c('Scenario index','EV scenario', 'PV scenario', 'WP scenario'))
 scenarioindex = scenarionumber[,1]
 
 print("--> Write csv's for VISION (3c/3)--")
-setwd(paste0(path,"/7. Output/1. VISION"))
+setwd(paste0(path,"/7. Output/1. VISION input"))
 # write CSVs for VISION
 progressbar = txtProgressBar(min = 0, max = length(scenarioindex), initial = 0, char = "=", style = 3)
 tic()

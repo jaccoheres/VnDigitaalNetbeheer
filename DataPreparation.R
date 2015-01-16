@@ -61,6 +61,8 @@ WPorder   = 4
 print("--Loading data (1b/6)--")
 setwd(paste0(path,"/7. Output"))
 load("Data_NH_v2.RData")
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
 
 ################################################################################## Clean up data
 print("--Cleaning up data (2/6)--")
@@ -186,30 +188,44 @@ SJV[is.na(SJV)] = 0                                                    #Remove m
 # households of each PC6 are connected to each LSLD.
 print("--Create connection matrices (3/6)--")
 
-CreateInterconnectionMatrix <- function(FromTo,FromReferenceList,ToReferenceList,makeUnique) {
+CreateInterconnectionMatrix <- function(FromTo,FromReferenceList,ToReferenceList,makeFromUnique) {
   #INPUT: 
   #FromTo            = elements which will be coupled (example c(MSR$HOOFDLEIDING,MSR$MSR))
   #FromReferenceList = unique list of From-elements (example: variable 'HLD')
   #ToReferenceList   = unique list of To-elements (example: variable 'MSRlist')
   
-  if(makeUnique) {FromTo = unique(FromTo)}
-  #define indices
-  Fromindexlist = match(FromTo[,1],FromReferenceList)
-  Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the MSR index for each MSR ID
-  NANlist       = is.na(Toindexlist)==FALSE
+  # First determine dimensions of the "from" side (e.g. columns of the interconnection matrix)
+  # We can either make an interconnection matrix which makes connections from each unique element in "From" 
+  # to each unique element in "To", or we can make a matrix which allows duplicate entries in the "From"
+  if(makeFromUnique) { 
+    FromTo        = unique(FromTo)
+    Fromindexlist = match(FromTo[,1],FromReferenceList)
+    ncols         = length(FromReferenceList)
+    v_weights      = data.matrix(table(Fromindexlist))
+    v             = 1/v_weights[match(Fromindexlist,row.names(v_weights))]
+  } else {
+    Fromindexlist = 1:length(FromTo[,1])
+    ncols         = length(FromTo[,1])
+    v_index       = FromTo[Fromindexlist,1]
+    v_weights     = data.matrix(table(v_index))
+    v             = 1/v_weights[match(v_index,row.names(v_weights))]
+  }
   
-  #Create connection matrix
+  Toindexlist   = match(FromTo[,2],ToReferenceList)     # Find the "to" element which corresponds to each "from"  
+  NANlist       = is.na(Toindexlist)==FALSE  
   i             = Toindexlist[NANlist]
-  j             = Fromindexlist[NANlist]
-  v_weights     = table(Fromindexlist[NANlist])
-  v             = rep(1/v_weights,v_weights)
-  if(makeUnique) {ncols = length(FromReferenceList)} else {ncols = length(FromTo[,1])}
-  Outputmatrix = simple_triplet_matrix(i, j, v, nrow = length(ToReferenceList), ncols, dimnames = NULL) 
+  j             = Fromindexlist[NANlist] 
+  v             = v[NANlist]
+  nrows         = length(ToReferenceList)
+  
+  # Create output matrix
+  Outputmatrix = simple_triplet_matrix(i, j, v, nrows, ncols, dimnames = NULL) 
   return(Outputmatrix)
 }
 
 print("--> Build up connection matrices (3a/6)--")
 # KVEAN to asset 
+tic()
 KVEANtoPC6  = CreateInterconnectionMatrix(MSR[c("EAN","ARI_ADRES")],KVEAN,PC6,FALSE)      #Only use this for missing KV baseload. Couple EAN directly to asset using KVEANtoHLD
 KVEANtoHLD  = CreateInterconnectionMatrix(MSR[c("EAN","HOOFDLEIDING")],KVEAN,HLD,FALSE)
 KVEANtoMSR  = CreateInterconnectionMatrix(MSR[c("EAN","MSR")],KVEAN,MSRlist,FALSE)
@@ -246,9 +262,9 @@ i_new = 1:length(j_new)
 nMSR = dim(HLDtoMSR)[1]
 MSRtoHLD=simple_triplet_matrix(i_new,j_new,rep(1,length(i_new)),nrow = length(i_new),ncol = nMSR)
 
-
 # Because OSLDtoMSR is sparse and only has '1' as entry, inverse(OSLDtoMSR) = t(OSLDtoMSR)
 OSLDtoMSR = t(MSRtoOSLD)
+toc()
 
 ############## Find max capacity for HLD and MSR
 print("--Find max capacity for HLD and MSR and HLD length (3g/6)--")
@@ -442,13 +458,12 @@ GV_SJV[is.na(GV_SJV)]=0
 # create index vector for EANs for which we have telmet data
 telmet = !notelmet
 indextelmet = match(GV$EAN[telmet],GVprofiletelmet$AANSLUITING_EAN)
-indexGV = seq(1,nGV)[telmet]
-GVprofiletelmet = data.matrix(-GVprofiletelmet[,-1])
+GVprofiletelmetmat = data.matrix(-GVprofiletelmet[,-1])
 
 # create matrix
-GVuse             = matrix(NA,nGV,365*24*4)
+GVuse             = matrix(0,nGV,365*24*4)
 GVuse[notelmet,]   = (t(GVbaseprofile[,KVKnumber])*GV_SJV*4)            # output is matrix filled with NA for GV with telmet and year values for those without telmet
-GVuse[telmet,]     = GVprofiletelmet[indextelmet,]                      # now add telmet data
+GVuse[telmet,]     = GVprofiletelmetmat[indextelmet,]                # now add telmet data
 GVbaseloadperMSR  = (matprod_simple_triplet_matrix(GVEANtoMSR, (GVuse)))  
 GVbaseloadperOSLD = (matprod_simple_triplet_matrix(GVEANtoOSLD, (GVuse)))
 
@@ -459,7 +474,7 @@ baseloadperHLD = KVbaseloadperHLD
 baseloadperMSR = KVbaseloadperMSR + GVbaseloadperMSR
 baseloadperOSLD = KVbaseloadperOSLD + GVbaseloadperOSLD
 
-rm(KVbaseloadperHLD,KVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperMSR,GVbaseloadperOSLD,GVuse)
+rm(KVbaseloadperHLD,KVbaseloadperMSR,KVbaseloadperOSLD,GVbaseloadperMSR,GVbaseloadperOSLD,GVuse,GVprofiletelmet,GVprofiletelmetmat)
 rm(Users,MSR,EDSN,EDSNperEAN,EDSNperHLD,EDSNperMSR,EDSNperOSLD,EVpartKV,EVpartKVPC4mat,EVzakGV,EVzakGVEANmat,EVzakKV,EVzakKVEANmat,GV,GVtemp,GVuse,HLDcap,HLDspec,MSRcap,MSRonb,PV_high,PV_low,PV_med,PVall,WP_high,WP_low,WP_med,WP_profile,WPall,dfHLDmax,hhPC4matrix,hhPC6matrix)
 gc()
 

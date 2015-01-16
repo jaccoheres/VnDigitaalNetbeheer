@@ -47,6 +47,8 @@ library(utils)
 #Load data (To generate this data: run DataPreparation.R)
 print("--Loading data--")
 load("Connections_NH_v2.RData")
+drive = substr(getwd(),1,3)
+path = paste0(drive,"1. Programmeerwerk/Bottum Up Analyse/2. Data")
 nCPUs = 8
 print("--Defining functions (1/3)--")
 # Defines function which calculates peak time per MSR
